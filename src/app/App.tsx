@@ -9,17 +9,17 @@ const BONUS_POINTS = 50;
 const users: User[] = [
   {
     id: "user-1",
-    name: "Tomi",
-    username: "tomi",
-    pin: "1234",
+    name: "Marti",
+    username: "martialeixo",
+    pin: "1508",
     role: "user",
     avatar: "🦸"
   },
   {
     id: "admin-1",
-    name: "Sofi",
-    username: "sofi",
-    pin: "4321",
+    name: "Onia",
+    username: "onialeixo",
+    pin: "2601",
     role: "admin",
     avatar: "🛡️"
   }
