@@ -7,14 +7,23 @@ import {
   Edit2,
   Flag,
   History,
-  ListTodo,
   Lock,
+  Menu,
   Plus,
+  Settings,
   ShieldCheck,
   Trash2,
   UserRound,
+  UserRoundCog,
   XCircle
 } from "lucide-react";
+import avatarHoodie from "@/assets/avatars/avatar-hoodie.svg";
+import avatarHeadset from "@/assets/avatars/avatar-headset.svg";
+import avatarCap from "@/assets/avatars/avatar-cap.svg";
+import avatarPlay from "@/assets/avatars/avatar-play.svg";
+import avatarPepsi from "@/assets/avatars/avatar-pepsi.svg";
+import avatarCamera from "@/assets/avatars/avatar-camera.svg";
+import avatarGlasses from "@/assets/avatars/avatar-glasses.svg";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
@@ -30,9 +39,13 @@ interface TasksProps {
   tasks: Task[];
   claims: TaskClaim[];
   progress: UserProgress;
+  productsCount: number;
+  categoriesCount: number;
   dailyGoal: number;
   bonusPoints: number;
   onLogout: () => void;
+  onUpdateProfileName: (name: string) => void;
+  onUpdateAvatar: (avatar: string) => void;
   onCreateClaim: (taskId: string, note: string) => void;
   onApproveClaim: (claimId: string) => void;
   onRejectClaim: (claimId: string, note: string) => void;
@@ -66,9 +79,13 @@ export function Tasks({
   tasks,
   claims,
   progress,
+  productsCount,
+  categoriesCount,
   dailyGoal,
   bonusPoints,
   onLogout,
+  onUpdateProfileName,
+  onUpdateAvatar,
   onCreateClaim,
   onApproveClaim,
   onRejectClaim,
@@ -82,6 +99,10 @@ export function Tasks({
     "pending"
   );
   const [showHistory, setShowHistory] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [pendingName, setPendingName] = useState(currentUser.name);
   const [claimModalTask, setClaimModalTask] = useState<Task | null>(null);
   const [claimNote, setClaimNote] = useState("");
   const [adminAction, setAdminAction] = useState<{
@@ -221,38 +242,57 @@ export function Tasks({
 
   const modeLabel = isAdmin ? "Modo Adulto" : "Modo Aventura";
 
+  const handleOpenNameModal = () => {
+    setPendingName(currentUser.name);
+    setShowNameModal(true);
+  };
+
+  const handleConfirmName = () => {
+    if (pendingName.trim()) {
+      onUpdateProfileName(pendingName.trim());
+      setShowNameModal(false);
+    }
+  };
+
+  const avatarOptions = [
+    { id: "hoodie", src: avatarHoodie, label: "Hoodie" },
+    { id: "headset", src: avatarHeadset, label: "Headset" },
+    { id: "cap", src: avatarCap, label: "Gorra" },
+    { id: "play", src: avatarPlay, label: "Gaming" },
+    { id: "pepsi", src: avatarPepsi, label: "Pepsi" },
+    { id: "camera", src: avatarCamera, label: "Cámara" },
+    { id: "glasses", src: avatarGlasses, label: "Lentes" }
+  ];
+
   return (
     <div className="min-h-screen bg-[#E2DADB] pb-24">
-      <div className="sticky top-0 z-10 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] px-6 py-6 shadow-lg">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <ListTodo className="w-6 h-6" />
-              Tareas
-            </h1>
-            <p className="text-white/80 text-sm">{modeLabel}</p>
-          </div>
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] px-6 py-5 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
-            {!isAdmin && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="bg-white/20 text-white hover:bg-white/30"
-                onClick={() => setShowHistory(true)}
-              >
-                <History className="w-4 h-4 mr-2" />
-                Historial
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/20"
+              onClick={() => setShowProfileMenu(true)}
+            >
+              <Menu className="w-6 h-6" />
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-white">Tareas</h1>
+              <p className="text-white/80 text-sm">{modeLabel}</p>
+            </div>
+          </div>
+          {!isAdmin && (
             <Button
               variant="secondary"
               size="sm"
               className="bg-white/20 text-white hover:bg-white/30"
-              onClick={onLogout}
+              onClick={() => setShowHistory(true)}
             >
-              Cerrar sesión
+              <History className="w-4 h-4 mr-2" />
+              Historial
             </Button>
-          </div>
+          )}
         </div>
 
         {!isAdmin && (
@@ -297,7 +337,7 @@ export function Tasks({
         {!isAdmin && (
           <div>
             <h2 className="text-lg font-bold text-[#12130F] mb-3">Para hoy</h2>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {activeTasks.map((task, index) => {
                 const latestClaim = getLatestClaimForTask(task);
                 const status = latestClaim?.status ?? "idle";
@@ -310,15 +350,15 @@ export function Tasks({
                     transition={{ delay: index * 0.05 }}
                   >
                     <Card className="p-4 bg-white/95 border-2 border-[#386FA4]/20">
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-2">
                           <h3 className="font-bold text-[#12130F]">{task.title}</h3>
                           {task.description && (
                             <p className="text-sm text-[#386FA4]/80">
                               {task.description}
                             </p>
                           )}
-                          <div className="flex items-center gap-2 mt-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <Badge className="bg-blue-100 text-blue-700 border-0">
                               +{task.points} pts
                             </Badge>
@@ -330,29 +370,29 @@ export function Tasks({
                             </Badge>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
+                        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
                           {status === "idle" && (
                             <Button
-                              className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                              className="w-full bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white sm:w-auto"
                               onClick={() => openTaskModal(task)}
                             >
                               Marcar como hecha
                             </Button>
                           )}
                           {status === "pending" && (
-                            <Button variant="secondary" disabled>
+                            <Button variant="secondary" disabled className="w-full sm:w-auto">
                               Pendiente de aprobación
                             </Button>
                           )}
                           {status === "approved" && (
-                            <Button variant="secondary" disabled>
+                            <Button variant="secondary" disabled className="w-full sm:w-auto">
                               Aprobada ✅
                             </Button>
                           )}
                           {status === "rejected" && (
                             <Button
                               variant="outline"
-                              className="border-red-300 text-red-600"
+                              className="w-full border-red-300 text-red-600 sm:w-auto"
                               onClick={() => openTaskModal(task)}
                             >
                               Reenviar
@@ -855,6 +895,182 @@ export function Tasks({
                     </div>
                   );
                 })}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showProfileMenu && (
+          <motion.div
+            className="fixed inset-0 z-40 flex"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="flex-1 bg-black/40"
+              onClick={() => setShowProfileMenu(false)}
+            />
+            <motion.div
+              className="w-[82%] max-w-xs bg-gradient-to-b from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-2xl"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 260, damping: 30 }}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="h-14 w-14 rounded-full bg-white/20 flex items-center justify-center text-2xl">
+                    <img
+                      src={currentUser.avatar}
+                      alt={`Avatar de ${currentUser.name}`}
+                      className="h-full w-full object-cover rounded-full"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">{currentUser.name}</p>
+                    <p className="text-xs text-white/80">Nivel {Math.floor(progress.xp / 1000) + 1}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:bg-white/20"
+                  onClick={() => setShowProfileMenu(false)}
+                >
+                  <XCircle className="w-5 h-5" />
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2 mb-6">
+                <Button
+                  size="sm"
+                  className="bg-emerald-400 text-white hover:bg-emerald-500"
+                  onClick={() => setShowAvatarModal(true)}
+                >
+                  <UserRoundCog className="w-4 h-4 mr-2" />
+                  Avatar
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-white/20 text-white hover:bg-white/30"
+                  onClick={handleOpenNameModal}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Nombre
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <Card className="bg-white/95 text-[#12130F] p-3">
+                  <p className="text-xs text-[#386FA4]">Puntos</p>
+                  <p className="text-lg font-bold">{progress.points}</p>
+                </Card>
+                <Card className="bg-white/95 text-[#12130F] p-3">
+                  <p className="text-xs text-[#386FA4]">Racha</p>
+                  <p className="text-lg font-bold">{progress.streak} días</p>
+                </Card>
+                <Card className="bg-white/95 text-[#12130F] p-3">
+                  <p className="text-xs text-[#386FA4]">Productos</p>
+                  <p className="text-lg font-bold">{productsCount}</p>
+                </Card>
+                <Card className="bg-white/95 text-[#12130F] p-3">
+                  <p className="text-xs text-[#386FA4]">Categorías</p>
+                  <p className="text-lg font-bold">{categoriesCount}</p>
+                </Card>
+              </div>
+
+              <div className="mt-6">
+                <Button
+                  className="w-full bg-white text-[#386FA4] hover:bg-white/90"
+                  onClick={onLogout}
+                >
+                  Cerrar sesión
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showNameModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Card className="w-full max-w-sm p-6 bg-white">
+              <h3 className="text-lg font-bold text-[#12130F] mb-3">
+                Editar nombre de perfil
+              </h3>
+              <Input
+                value={pendingName}
+                onChange={(event) => setPendingName(event.target.value)}
+                placeholder="Nombre de perfil"
+                className="mb-4"
+              />
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={() => setShowNameModal(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                  onClick={handleConfirmName}
+                >
+                  Guardar
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAvatarModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Card className="w-full max-w-md p-6 bg-white">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-[#12130F]">
+                  Elegí tu avatar
+                </h3>
+                <Button variant="ghost" onClick={() => setShowAvatarModal(false)}>
+                  Cerrar
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {avatarOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`rounded-2xl border-2 p-2 transition ${
+                      currentUser.avatar === option.src
+                        ? "border-[#386FA4] bg-[#386FA4]/10"
+                        : "border-transparent hover:border-[#386FA4]/40"
+                    }`}
+                    onClick={() => {
+                      onUpdateAvatar(option.src);
+                      setShowAvatarModal(false);
+                    }}
+                  >
+                    <img
+                      src={option.src}
+                      alt={option.label}
+                      className="w-full rounded-xl object-cover"
+                    />
+                    <p className="mt-2 text-xs text-[#386FA4] font-semibold">
+                      {option.label}
+                    </p>
+                  </button>
+                ))}
               </div>
             </Card>
           </motion.div>
