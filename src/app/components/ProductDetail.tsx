@@ -1,21 +1,11 @@
-import { motion } from "motion/react";
-import { ArrowLeft, Star, TrendingUp, Award, Calendar, BarChart3 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Globe } from "lucide-react";
+import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
-import { Badge } from "@/app/components/ui/badge";
-
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  barcode: string;
-  rarity: "común" | "raro" | "épico" | "legendario";
-  dateScanned: string;
-  scanCount: number;
-}
+import type { CollectedProduct } from "@/app/types";
 
 interface ProductDetailProps {
-  product: Product;
+  product: CollectedProduct;
   onBack: () => void;
 }
 
@@ -34,37 +24,19 @@ const rarityBadgeColors = {
 };
 
 export function ProductDetail({ product, onBack }: ProductDetailProps) {
-  // Mock achievements related to this product
-  const achievements = [
-    {
-      id: 1,
-      title: "Primer Escaneo",
-      description: "Escaneaste este producto por primera vez",
-      unlocked: true,
-      date: product.dateScanned
-    },
-    {
-      id: 2,
-      title: "Fan Número 1",
-      description: "Escaneá este producto 5 veces",
-      unlocked: product.scanCount >= 5,
-      date: product.scanCount >= 5 ? new Date().toISOString() : null
-    },
-    {
-      id: 3,
-      title: "Súper Fan",
-      description: "Escaneá este producto 10 veces",
-      unlocked: product.scanCount >= 10,
-      date: product.scanCount >= 10 ? new Date().toISOString() : null
-    }
-  ];
+  const handleGoogleSearch = () => {
+    const query = encodeURIComponent(
+      `${product.name} ${product.brand ?? ""} ${product.barcode}`
+    );
+    window.open(`https://www.google.com/search?q=${query}`, "_blank");
+  };
 
-  const totalPoints = product.scanCount * 100;
-  const totalXP = product.scanCount * 50;
+  const handleOpenOff = () => {
+    window.open(`https://world.openfoodfacts.org/product/${product.barcode}`, "_blank");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 shadow-lg">
         <div className="flex items-center gap-4">
           <Button
@@ -82,153 +54,78 @@ export function ProductDetail({ product, onBack }: ProductDetailProps) {
       </div>
 
       <div className="px-6 py-6 space-y-6">
-        {/* Product Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <Card className="p-6 bg-white/95 backdrop-blur shadow-xl border-2 border-blue-200">
-            <div className={`w-full aspect-square rounded-2xl bg-gradient-to-br ${rarityColors[product.rarity]} flex items-center justify-center mb-4 shadow-lg`}>
-              <Star className="w-24 h-24 text-white" />
-            </div>
-            
-            <div className="text-center mb-4">
-              <Badge className={`${rarityBadgeColors[product.rarity]} border mb-3`}>
-                {product.rarity.toUpperCase()}
-              </Badge>
-              <h2 className="text-2xl font-bold text-blue-900 mb-2">{product.name}</h2>
-              <p className="text-blue-600">{product.category}</p>
-              <p className="text-xs text-gray-500 mt-2">Código: {product.barcode}</p>
-            </div>
+        <Card className="p-6 bg-white/95 backdrop-blur shadow-xl border-2 border-blue-200">
+          <div
+            className={`w-full aspect-square rounded-2xl bg-gradient-to-br ${
+              rarityColors[product.rarity]
+            } flex items-center justify-center mb-4 shadow-lg overflow-hidden`}
+          >
+            {product.imageUrl ? (
+              <img
+                src={product.imageUrl}
+                alt={product.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-white text-4xl">🧃</span>
+            )}
+          </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Card className="p-3 bg-blue-50 border-blue-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <BarChart3 className="w-4 h-4 text-blue-600" />
-                  <span className="text-xs text-blue-600">Veces escaneado</span>
-                </div>
-                <p className="text-2xl font-bold text-blue-900">{product.scanCount}</p>
-              </Card>
+          <div className="text-center mb-4">
+            <Badge className={`${rarityBadgeColors[product.rarity]} border mb-3`}>
+              {product.rarity.toUpperCase()}
+            </Badge>
+            <h2 className="text-2xl font-bold text-blue-900 mb-2">{product.name}</h2>
+            {product.brand && <p className="text-blue-600">{product.brand}</p>}
+            <p className="text-xs text-gray-500 mt-2">Barcode: {product.barcode}</p>
+          </div>
 
-              <Card className="p-3 bg-indigo-50 border-indigo-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <Calendar className="w-4 h-4 text-indigo-600" />
-                  <span className="text-xs text-indigo-600">Primera vez</span>
-                </div>
-                <p className="text-sm font-bold text-indigo-900">
-                  {new Date(product.dateScanned).toLocaleDateString('es-AR')}
-                </p>
-              </Card>
-            </div>
-          </Card>
-        </motion.div>
-
-        {/* Statistics */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <h3 className="text-lg font-bold text-blue-900 mb-3">Estadísticas</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <Card className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-                <span className="text-sm text-amber-700 font-semibold">Puntos</span>
-              </div>
-              <p className="text-3xl font-bold text-amber-900">{totalPoints}</p>
-              <p className="text-xs text-amber-600 mt-1">Ganados con este producto</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="p-3 bg-blue-50 border-blue-200">
+              <p className="text-xs text-blue-600">Categoría app</p>
+              <p className="text-lg font-bold text-blue-900">{product.appCategory}</p>
             </Card>
-
-            <Card className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-5 h-5 text-blue-500" />
-                <span className="text-sm text-blue-700 font-semibold">Experiencia</span>
-              </div>
-              <p className="text-3xl font-bold text-blue-900">{totalXP}</p>
-              <p className="text-xs text-blue-600 mt-1">XP total acumulado</p>
+            <Card className="p-3 bg-indigo-50 border-indigo-200">
+              <p className="text-xs text-indigo-600">Escaneos</p>
+              <p className="text-lg font-bold text-indigo-900">{product.scanCount}</p>
             </Card>
           </div>
-        </motion.div>
+        </Card>
 
-        {/* Achievements */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <h3 className="text-lg font-bold text-emerald-900 mb-3 flex items-center gap-2">
-            <Award className="w-5 h-5" />
-            Logros Relacionados
-          </h3>
-          <div className="space-y-3">
-            {achievements.map((achievement, index) => (
-              <motion.div
-                key={achievement.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 + index * 0.1 }}
-              >
-                <Card className={`p-4 ${
-                  achievement.unlocked
-                    ? "bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200"
-                    : "bg-gray-50 border-2 border-gray-200"
-                }`}>
-                  <div className="flex items-start gap-3">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      achievement.unlocked
-                        ? "bg-gradient-to-br from-purple-400 to-pink-500"
-                        : "bg-gray-300"
-                    }`}>
-                      <Award className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className={`font-bold mb-1 ${
-                        achievement.unlocked ? "text-purple-900" : "text-gray-500"
-                      }`}>
-                        {achievement.title}
-                      </h4>
-                      <p className={`text-sm ${
-                        achievement.unlocked ? "text-purple-600" : "text-gray-400"
-                      }`}>
-                        {achievement.description}
-                      </p>
-                      {achievement.unlocked && achievement.date && (
-                        <p className="text-xs text-purple-500 mt-1">
-                          Desbloqueado: {new Date(achievement.date).toLocaleDateString('es-AR')}
-                        </p>
-                      )}
-                    </div>
-                    {achievement.unlocked && (
-                      <Badge className="bg-purple-500 text-white border-0">
-                        ✓
-                      </Badge>
-                    )}
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Fun Fact */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <Card className="p-4 bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-200">
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">💡</div>
+        {(product.ingredients || product.allergens) && (
+          <Card className="p-5 bg-white/95 border-2 border-blue-200">
+            {product.ingredients && (
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-blue-900 mb-1">Ingredientes</h3>
+                <p className="text-sm text-blue-700">{product.ingredients}</p>
+              </div>
+            )}
+            {product.allergens && (
               <div>
-                <h4 className="font-bold text-cyan-900 mb-1">Dato Curioso</h4>
-                <p className="text-sm text-cyan-700">
-                  Este producto representa el {((product.scanCount / 10) * 100).toFixed(1)}% de tu actividad de escaneo total. ¡Seguí coleccionando!
-                </p>
+                <h3 className="text-sm font-semibold text-blue-900 mb-1">Alérgenos</h3>
+                <p className="text-sm text-blue-700">{product.allergens}</p>
               </div>
-            </div>
+            )}
           </Card>
-        </motion.div>
+        )}
+
+        <div className="grid grid-cols-1 gap-3">
+          <Button
+            onClick={handleGoogleSearch}
+            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white"
+          >
+            <Globe className="w-5 h-5 mr-2" />
+            Buscar en Google
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleOpenOff}
+            className="w-full border-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+          >
+            <ExternalLink className="w-5 h-5 mr-2" />
+            Ver en OpenFoodFacts
+          </Button>
+        </div>
       </div>
     </div>
   );

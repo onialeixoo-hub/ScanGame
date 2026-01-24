@@ -1,6 +1,15 @@
 export type Role = "admin" | "user";
 export type TaskFrequency = "once" | "daily" | "weekly";
 export type ClaimStatus = "pending" | "approved" | "rejected";
+export type AppCategory =
+  | "Alimentos"
+  | "Bebidas"
+  | "Higiene/Cuidado personal"
+  | "Limpieza/Hogar"
+  | "Mascotas"
+  | "Salud/Farmacia"
+  | "Otros";
+export type ProductRarity = "común" | "raro" | "épico" | "legendario";
 
 export interface User {
   id: string;
@@ -38,4 +47,21 @@ export interface UserProgress {
   points: number;
   streak: number;
   bonusAwardedOn?: string;
+  scanStreak?: number;
+  lastScanDate?: string;
+}
+
+export interface CollectedProduct {
+  barcode: string;
+  name: string;
+  brand?: string;
+  imageUrl?: string;
+  offCategoriesRaw?: string;
+  appCategory: AppCategory;
+  rarity: ProductRarity;
+  dateFirstScanned: string;
+  lastScannedAt: string;
+  scanCount: number;
+  ingredients?: string;
+  allergens?: string;
 }
