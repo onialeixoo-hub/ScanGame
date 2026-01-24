@@ -1,308 +1,865 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, Plus, Check, Star, Sparkles, Trash2, Edit2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import {
+  CheckCircle2,
+  Clock,
+  Crown,
+  Edit2,
+  Flag,
+  History,
+  ListTodo,
+  Lock,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  UserRound,
+  XCircle
+} from "lucide-react";
+import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
-import { Badge } from "@/app/components/ui/badge";
-
-interface Task {
-  id: string;
-  title: string;
-  xpReward: number;
-  pointsReward: number;
-  completed: boolean;
-  completedDate?: string;
-}
+import { Progress } from "@/app/components/ui/progress";
+import { Switch } from "@/app/components/ui/switch";
+import { Textarea } from "@/app/components/ui/textarea";
+import type { Task, TaskClaim, TaskFrequency, User, UserProgress } from "@/app/types";
 
 interface TasksProps {
+  currentUser: User;
+  users: User[];
   tasks: Task[];
-  onBack: () => void;
-  onAddTask: (task: Omit<Task, "id" | "completed">) => void;
-  onCompleteTask: (taskId: string) => void;
+  claims: TaskClaim[];
+  progress: UserProgress;
+  dailyGoal: number;
+  bonusPoints: number;
+  onLogout: () => void;
+  onCreateClaim: (taskId: string, note: string) => void;
+  onApproveClaim: (claimId: string) => void;
+  onRejectClaim: (claimId: string, note: string) => void;
+  onCreateTask: (task: Omit<Task, "id">) => void;
+  onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
   onDeleteTask: (taskId: string) => void;
+  onResetProgress: () => void;
 }
 
-const predefinedTasks = [
-  { title: "Hacer la cama", xp: 25, points: 50 },
-  { title: "Lavar los platos", xp: 30, points: 60 },
-  { title: "Ordenar mi cuarto", xp: 50, points: 100 },
-  { title: "Hacer la tarea", xp: 75, points: 150 },
-  { title: "Leer 30 minutos", xp: 40, points: 80 },
-  { title: "Hacer ejercicio", xp: 60, points: 120 },
-  { title: "Ayudar en casa", xp: 35, points: 70 },
-  { title: "Estudiar 1 hora", xp: 100, points: 200 }
-];
+const frequencyLabels: Record<TaskFrequency, string> = {
+  once: "Una vez",
+  daily: "Diaria",
+  weekly: "Semanal"
+};
 
-export function Tasks({ tasks, onBack, onAddTask, onCompleteTask, onDeleteTask }: TasksProps) {
-  const [showAddTask, setShowAddTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskXP, setNewTaskXP] = useState(25);
-  const [showPredefined, setShowPredefined] = useState(false);
+const formatTime = (value: string) =>
+  new Date(value).toLocaleTimeString("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 
-  const activeTasks = tasks.filter(t => !t.completed);
-  const completedTasks = tasks.filter(t => t.completed);
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "short"
+  });
 
-  const handleAddCustomTask = () => {
-    if (newTaskTitle.trim()) {
-      onAddTask({
-        title: newTaskTitle,
-        xpReward: newTaskXP,
-        pointsReward: newTaskXP * 2
-      });
-      setNewTaskTitle("");
-      setNewTaskXP(25);
-      setShowAddTask(false);
-    }
-  };
+export function Tasks({
+  currentUser,
+  users,
+  tasks,
+  claims,
+  progress,
+  dailyGoal,
+  bonusPoints,
+  onLogout,
+  onCreateClaim,
+  onApproveClaim,
+  onRejectClaim,
+  onCreateTask,
+  onUpdateTask,
+  onDeleteTask,
+  onResetProgress
+}: TasksProps) {
+  const isAdmin = currentUser.role === "admin";
+  const [activeTab, setActiveTab] = useState<"pending" | "tasks" | "user">(
+    "pending"
+  );
+  const [showHistory, setShowHistory] = useState(false);
+  const [claimModalTask, setClaimModalTask] = useState<Task | null>(null);
+  const [claimNote, setClaimNote] = useState("");
+  const [adminAction, setAdminAction] = useState<{
+    type: "approve" | "reject" | "reset";
+    claim?: TaskClaim;
+  } | null>(null);
+  const [adminPin, setAdminPin] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [rejectionNote, setRejectionNote] = useState("");
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
+  const [taskFormMode, setTaskFormMode] = useState<"create" | "edit">("create");
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [taskForm, setTaskForm] = useState<Omit<Task, "id">>({
+    title: "",
+    description: "",
+    points: 50,
+    xp: 25,
+    frequency: "daily",
+    active: true
+  });
 
-  const handleAddPredefinedTask = (task: typeof predefinedTasks[0]) => {
-    onAddTask({
-      title: task.title,
-      xpReward: task.xp,
-      pointsReward: task.points
+  const todayKey = useMemo(() => new Date().toDateString(), []);
+  const currentUserClaims = useMemo(
+    () => claims.filter((claim) => claim.userId === currentUser.id),
+    [claims, currentUser.id]
+  );
+  const pendingClaims = useMemo(
+    () =>
+      claims
+        .filter((claim) => claim.status === "pending")
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+    [claims]
+  );
+
+  const approvedToday = currentUserClaims.filter(
+    (claim) =>
+      claim.status === "approved" &&
+      claim.approvedAt &&
+      new Date(claim.approvedAt).toDateString() === todayKey
+  );
+
+  const progressValue = Math.min((approvedToday.length / dailyGoal) * 100, 100);
+  const dailyBonusUnlocked = approvedToday.length >= dailyGoal;
+
+  const activeTasks = tasks.filter((task) => task.active);
+
+  const getLatestClaimForTask = (task: Task) => {
+    const relevantClaims = currentUserClaims.filter((claim) => {
+      if (claim.taskId !== task.id) return false;
+      if (task.frequency === "daily") {
+        return new Date(claim.timestamp).toDateString() === todayKey;
+      }
+      return true;
     });
-    setShowPredefined(false);
+
+    return relevantClaims.sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    )[0];
   };
+
+  const openTaskModal = (task: Task) => {
+    setClaimModalTask(task);
+    setClaimNote("");
+  };
+
+  const handleCreateClaim = () => {
+    if (!claimModalTask) return;
+    onCreateClaim(claimModalTask.id, claimNote);
+    setClaimModalTask(null);
+    setClaimNote("");
+  };
+
+  const handleAdminConfirm = () => {
+    if (adminPin !== currentUser.pin) {
+      setAdminError("PIN incorrecto");
+      return;
+    }
+
+    if (adminAction?.type === "approve" && adminAction.claim) {
+      onApproveClaim(adminAction.claim.id);
+    }
+    if (adminAction?.type === "reject" && adminAction.claim) {
+      onRejectClaim(adminAction.claim.id, rejectionNote);
+    }
+    if (adminAction?.type === "reset") {
+      onResetProgress();
+    }
+
+    setAdminAction(null);
+    setAdminPin("");
+    setAdminError("");
+    setRejectionNote("");
+  };
+
+  const openTaskForm = (mode: "create" | "edit", task?: Task) => {
+    setTaskFormMode(mode);
+    if (task) {
+      setTaskForm({
+        title: task.title,
+        description: task.description ?? "",
+        points: task.points,
+        xp: task.xp,
+        frequency: task.frequency,
+        active: task.active
+      });
+      setEditingTaskId(task.id);
+    } else {
+      setTaskForm({
+        title: "",
+        description: "",
+        points: 50,
+        xp: 25,
+        frequency: "daily",
+        active: true
+      });
+      setEditingTaskId(null);
+    }
+    setTaskFormOpen(true);
+  };
+
+  const handleSubmitTaskForm = () => {
+    if (!taskForm.title.trim()) return;
+
+    if (taskFormMode === "create") {
+      onCreateTask(taskForm);
+    }
+
+    if (taskFormMode === "edit") {
+      if (editingTaskId) {
+        onUpdateTask(editingTaskId, taskForm);
+      }
+    }
+
+    setTaskFormOpen(false);
+    setEditingTaskId(null);
+  };
+
+  const modeLabel = isAdmin ? "Modo Adulto" : "Modo Aventura";
 
   return (
     <div className="min-h-screen bg-[#E2DADB] pb-24">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] px-6 py-6 shadow-lg">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold text-white">Mis Tareas</h1>
-          <p className="text-white/80 text-sm">Completá tareas y ganá recompensas</p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              <ListTodo className="w-6 h-6" />
+              Tareas
+            </h1>
+            <p className="text-white/80 text-sm">{modeLabel}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {!isAdmin && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="bg-white/20 text-white hover:bg-white/30"
+                onClick={() => setShowHistory(true)}
+              >
+                <History className="w-4 h-4 mr-2" />
+                Historial
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="bg-white/20 text-white hover:bg-white/30"
+              onClick={onLogout}
+            >
+              Cerrar sesión
+            </Button>
+          </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="p-3 bg-white/10 backdrop-blur border-0">
-            <p className="text-white/80 text-xs mb-1">Activas</p>
-            <p className="text-2xl font-bold text-white">{activeTasks.length}</p>
-          </Card>
-          <Card className="p-3 bg-white/10 backdrop-blur border-0">
-            <p className="text-white/80 text-xs mb-1">Completadas hoy</p>
-            <p className="text-2xl font-bold text-white">{completedTasks.length}</p>
-          </Card>
-        </div>
+        {!isAdmin && (
+          <div className="flex flex-wrap gap-2">
+            <Badge className="bg-white/20 text-white border-0">
+              <Flag className="w-3 h-3 mr-1" />
+              Racha {progress.streak} días
+            </Badge>
+            <Badge className="bg-white/20 text-white border-0">
+              <Crown className="w-3 h-3 mr-1" />
+              Puntos: {progress.points}
+            </Badge>
+          </div>
+        )}
       </div>
 
       <div className="px-6 pt-6 space-y-6">
-        {/* Add Task Buttons */}
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            onClick={() => {
-              setShowPredefined(!showPredefined);
-              setShowAddTask(false);
-            }}
-            className="h-14 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] hover:from-[#2d5a85] hover:to-[#386FA4] text-white font-semibold"
-          >
-            <Sparkles className="w-5 h-5 mr-2" />
-            Tareas Sugeridas
-          </Button>
-          <Button
-            onClick={() => {
-              setShowAddTask(!showAddTask);
-              setShowPredefined(false);
-            }}
-            variant="outline"
-            className="h-14 border-2 border-[#386FA4] text-[#386FA4] hover:bg-[#386FA4]/10 font-semibold"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Crear Tarea
-          </Button>
-        </div>
+        {!isAdmin && (
+          <Card className="p-4 bg-white/95 border-2 border-[#386FA4]/20">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-sm text-[#386FA4] font-semibold">
+                  Objetivo diario
+                </p>
+                <p className="text-lg font-bold text-[#12130F]">
+                  {approvedToday.length}/{dailyGoal} tareas aprobadas hoy
+                </p>
+              </div>
+              <Badge className="bg-amber-100 text-amber-700 border-0">
+                +{bonusPoints} bonus
+              </Badge>
+            </div>
+            <Progress value={progressValue} className="h-2 bg-[#E2DADB]" />
+            {dailyBonusUnlocked && (
+              <p className="text-xs text-emerald-600 font-semibold mt-2">
+                ¡Bonus desbloqueado!
+              </p>
+            )}
+          </Card>
+        )}
 
-        {/* Predefined Tasks */}
-        <AnimatePresence>
-          {showPredefined && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-            >
-              <Card className="p-4 bg-white/90 backdrop-blur border-2 border-blue-200">
-                <h3 className="font-bold text-blue-900 mb-3">Seleccioná una tarea:</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {predefinedTasks.map((task, index) => (
-                    <motion.button
-                      key={index}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.05 }}
-                      onClick={() => handleAddPredefinedTask(task)}
-                      className="p-3 rounded-lg bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 text-left transition-colors"
-                    >
-                      <p className="text-sm font-semibold text-blue-900 mb-1">{task.title}</p>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-blue-600">+{task.xp} XP</span>
-                        <span className="text-amber-600">+{task.points} pts</span>
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Custom Task Form */}
-        <AnimatePresence>
-          {showAddTask && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-            >
-              <Card className="p-4 bg-white/90 backdrop-blur border-2 border-blue-200">
-                <h3 className="font-bold text-blue-900 mb-3">Nueva Tarea</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-sm text-blue-700 mb-1 block">Nombre de la tarea</label>
-                    <Input
-                      type="text"
-                      placeholder="Ej: Hacer la cama"
-                      value={newTaskTitle}
-                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                      onKeyPress={(e) => e.key === "Enter" && handleAddCustomTask()}
-                      className="border-2 border-blue-200 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm text-blue-700 mb-1 block">
-                      Experiencia: {newTaskXP} XP (Puntos: {newTaskXP * 2})
-                    </label>
-                    <input
-                      type="range"
-                      min="10"
-                      max="200"
-                      step="5"
-                      value={newTaskXP}
-                      onChange={(e) => setNewTaskXP(Number(e.target.value))}
-                      className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                    />
-                  </div>
-                  <Button
-                    onClick={handleAddCustomTask}
-                    disabled={!newTaskTitle.trim()}
-                    className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold disabled:opacity-50"
-                  >
-                    <Plus className="w-5 h-5 mr-2" />
-                    Agregar Tarea
-                  </Button>
-                </div>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Active Tasks */}
-        {activeTasks.length > 0 && (
+        {!isAdmin && (
           <div>
-            <h2 className="text-lg font-bold text-blue-900 mb-3">Tareas Pendientes</h2>
+            <h2 className="text-lg font-bold text-[#12130F] mb-3">Para hoy</h2>
             <div className="space-y-3">
-              {activeTasks.map((task, index) => (
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  layout
-                >
-                  <Card className="p-4 bg-white/90 backdrop-blur border-2 border-blue-200 hover:shadow-lg transition-shadow">
-                    <div className="flex items-start gap-3">
-                      <button
-                        onClick={() => onCompleteTask(task.id)}
-                        className="w-10 h-10 rounded-full border-2 border-blue-400 hover:bg-blue-500 hover:border-blue-500 transition-colors flex items-center justify-center group flex-shrink-0 mt-1"
-                      >
-                        <Check className="w-6 h-6 text-blue-400 group-hover:text-white" />
-                      </button>
-                      <div className="flex-1">
-                        <h3 className="font-bold text-blue-900 mb-1">{task.title}</h3>
-                        <div className="flex items-center gap-3">
-                          <Badge className="bg-blue-100 text-blue-700 border-0">
-                            <Sparkles className="w-3 h-3 mr-1" />
-                            +{task.xpReward} XP
-                          </Badge>
-                          <Badge className="bg-amber-100 text-amber-700 border-0">
-                            <Star className="w-3 h-3 mr-1" />
-                            +{task.pointsReward} pts
-                          </Badge>
+              {activeTasks.map((task, index) => {
+                const latestClaim = getLatestClaimForTask(task);
+                const status = latestClaim?.status ?? "idle";
+
+                return (
+                  <motion.div
+                    key={task.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <Card className="p-4 bg-white/95 border-2 border-[#386FA4]/20">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-bold text-[#12130F]">{task.title}</h3>
+                          {task.description && (
+                            <p className="text-sm text-[#386FA4]/80">
+                              {task.description}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge className="bg-blue-100 text-blue-700 border-0">
+                              +{task.points} pts
+                            </Badge>
+                            <Badge className="bg-purple-100 text-purple-700 border-0">
+                              +{task.xp} XP
+                            </Badge>
+                            <Badge className="bg-slate-100 text-slate-700 border-0">
+                              {frequencyLabels[task.frequency]}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          {status === "idle" && (
+                            <Button
+                              className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                              onClick={() => openTaskModal(task)}
+                            >
+                              Marcar como hecha
+                            </Button>
+                          )}
+                          {status === "pending" && (
+                            <Button variant="secondary" disabled>
+                              Pendiente de aprobación
+                            </Button>
+                          )}
+                          {status === "approved" && (
+                            <Button variant="secondary" disabled>
+                              Aprobada ✅
+                            </Button>
+                          )}
+                          {status === "rejected" && (
+                            <Button
+                              variant="outline"
+                              className="border-red-300 text-red-600"
+                              onClick={() => openTaskModal(task)}
+                            >
+                              Reenviar
+                            </Button>
+                          )}
+                          {status === "rejected" && latestClaim?.rejectionNote && (
+                            <p className="text-xs text-red-500">
+                              Motivo: {latestClaim.rejectionNote}
+                            </p>
+                          )}
                         </div>
                       </div>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {isAdmin && (
+          <div className="flex gap-2">
+            {(["pending", "tasks", "user"] as const).map((tab) => (
+              <Button
+                key={tab}
+                variant={activeTab === tab ? "default" : "secondary"}
+                className={
+                  activeTab === tab
+                    ? "bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                    : "bg-white/70 text-[#386FA4]"
+                }
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab === "pending" && "Pendientes"}
+                {tab === "tasks" && "Tareas"}
+                {tab === "user" && "Usuario"}
+              </Button>
+            ))}
+          </div>
+        )}
+
+        {isAdmin && activeTab === "pending" && (
+          <div className="space-y-3">
+            {pendingClaims.length === 0 && (
+              <Card className="p-6 bg-white/90 border-2 border-[#386FA4]/20 text-center">
+                <p className="text-[#386FA4] font-semibold">
+                  No hay tareas pendientes 🎉
+                </p>
+              </Card>
+            )}
+            {pendingClaims.map((claim) => {
+              const task = tasks.find((item) => item.id === claim.taskId);
+              const user = users.find((item) => item.id === claim.userId);
+
+              return (
+                <Card
+                  key={claim.id}
+                  className="p-4 bg-white/95 border-2 border-[#386FA4]/20"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-8 h-8 rounded-full bg-[#386FA4]/10 flex items-center justify-center">
+                          <UserRound className="w-4 h-4 text-[#386FA4]" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[#12130F]">
+                            {user?.name ?? "Usuario"}
+                          </p>
+                          <p className="text-xs text-[#386FA4]">
+                            {formatTime(claim.timestamp)}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="font-bold text-[#12130F]">
+                        {task?.title ?? "Tarea"}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge className="bg-blue-100 text-blue-700 border-0">
+                          +{task?.points ?? 0} pts
+                        </Badge>
+                        <Badge className="bg-purple-100 text-purple-700 border-0">
+                          +{task?.xp ?? 0} XP
+                        </Badge>
+                      </div>
+                      {claim.note && (
+                        <p className="text-sm text-[#386FA4] mt-2">
+                          Nota: {claim.note}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
                       <Button
-                        onClick={() => onDeleteTask(task.id)}
-                        variant="ghost"
-                        size="icon"
-                        className="text-gray-400 hover:text-red-500 flex-shrink-0"
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                        onClick={() => {
+                          setAdminAction({ type: "approve", claim });
+                          setAdminPin("");
+                          setAdminError("");
+                        }}
                       >
-                        <Trash2 className="w-5 h-5" />
+                        Aprobar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-red-300 text-red-600"
+                        onClick={() => {
+                          setAdminAction({ type: "reject", claim });
+                          setAdminPin("");
+                          setAdminError("");
+                        }}
+                      >
+                        Rechazar
                       </Button>
                     </div>
-                  </Card>
-                </motion.div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {isAdmin && activeTab === "tasks" && (
+          <div className="space-y-4">
+            <Button
+              className="w-full bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+              onClick={() => openTaskForm("create")}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Nueva tarea
+            </Button>
+            <div className="space-y-3">
+              {tasks.map((task) => (
+                <Card
+                  key={task.id}
+                  className="p-4 bg-white/95 border-2 border-[#386FA4]/20"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-[#12130F]">{task.title}</p>
+                      {task.description && (
+                        <p className="text-sm text-[#386FA4]">
+                          {task.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge className="bg-blue-100 text-blue-700 border-0">
+                          {frequencyLabels[task.frequency]}
+                        </Badge>
+                        <Badge className="bg-amber-100 text-amber-700 border-0">
+                          +{task.points} pts
+                        </Badge>
+                        <Badge className="bg-purple-100 text-purple-700 border-0">
+                          +{task.xp} XP
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-3">
+                      <Switch
+                        checked={task.active}
+                        onCheckedChange={(checked) =>
+                          onUpdateTask(task.id, { active: checked })
+                        }
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openTaskForm("edit", task)}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onDeleteTask(task.id)}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
               ))}
             </div>
           </div>
         )}
 
-        {/* Empty State */}
-        {activeTasks.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center py-12"
-          >
-            <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-12 h-12 text-blue-400" />
-            </div>
-            <h3 className="text-xl font-bold text-blue-900 mb-2">¡Agregá tus primeras tareas!</h3>
-            <p className="text-blue-600">Completá tareas y ganá XP para subir de nivel</p>
-          </motion.div>
-        )}
-
-        {/* Completed Tasks */}
-        {completedTasks.length > 0 && (
-          <div>
-            <h2 className="text-lg font-bold text-blue-900 mb-3">Completadas Hoy 🎉</h2>
-            <div className="space-y-2">
-              {completedTasks.map((task, index) => (
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: index * 0.05 }}
-                  layout
-                >
-                  <Card className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
-                        <Check className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-green-900 text-sm line-through opacity-75">
-                          {task.title}
-                        </p>
-                        <p className="text-xs text-green-600">
-                          +{task.xpReward} XP • +{task.pointsReward} puntos
-                        </p>
-                      </div>
-                      <Button
-                        onClick={() => onDeleteTask(task.id)}
-                        variant="ghost"
-                        size="icon"
-                        className="text-gray-400 hover:text-red-500 flex-shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
+        {isAdmin && activeTab === "user" && (
+          <div className="space-y-4">
+            <Card className="p-5 bg-white/95 border-2 border-[#386FA4]/20">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-[#386FA4]/10 flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6 text-[#386FA4]" />
+                </div>
+                <div>
+                  <p className="text-sm text-[#386FA4] font-semibold">Nivel</p>
+                  <p className="text-xl font-bold text-[#12130F]">
+                    {Math.floor(progress.xp / 1000) + 1}
+                  </p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-sm text-[#386FA4] font-semibold">XP</p>
+                  <p className="text-xl font-bold text-[#12130F]">{progress.xp}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                  <p className="text-sm text-[#386FA4]">Puntos totales</p>
+                  <p className="text-lg font-bold text-[#12130F]">
+                    {progress.points}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-[#386FA4]">Racha diaria</p>
+                  <p className="text-lg font-bold text-[#12130F]">
+                    {progress.streak} días
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-[#386FA4]">Aprobadas hoy</p>
+                  <p className="text-lg font-bold text-[#12130F]">
+                    {approvedToday.length}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-[#386FA4]">Aprobadas semana</p>
+                  <p className="text-lg font-bold text-[#12130F]">
+                    {
+                      currentUserClaims.filter(
+                        (claim) => claim.status === "approved"
+                      ).length
+                    }
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="destructive"
+                className="mt-6 w-full"
+                onClick={() => {
+                  setAdminAction({ type: "reset" });
+                  setAdminPin("");
+                  setAdminError("");
+                }}
+              >
+                Resetear progreso
+              </Button>
+            </Card>
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {claimModalTask && (
+          <motion.div
+            className="fixed inset-0 bg-black/40 flex items-center justify-center px-6 z-20"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Card className="w-full max-w-md p-6 bg-white">
+              <h3 className="text-lg font-bold text-[#12130F] mb-2">
+                ¿Confirmás que completaste "{claimModalTask.title}"?
+              </h3>
+              <p className="text-sm text-[#386FA4] mb-4">
+                Se enviará para aprobación.
+              </p>
+              <Textarea
+                value={claimNote}
+                onChange={(event) => setClaimNote(event.target.value)}
+                placeholder="Nota opcional"
+                className="mb-4"
+              />
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={() => setClaimModalTask(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                  onClick={handleCreateClaim}
+                >
+                  Enviar para aprobación
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {adminAction && (
+          <motion.div
+            className="fixed inset-0 bg-black/40 flex items-center justify-center px-6 z-30"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Card className="w-full max-w-sm p-6 bg-white">
+              <div className="flex items-center gap-2 mb-3">
+                <Lock className="w-4 h-4 text-[#386FA4]" />
+                <h3 className="text-lg font-bold text-[#12130F]">
+                  Confirmar acción
+                </h3>
+              </div>
+              <p className="text-sm text-[#386FA4] mb-3">
+                Ingresá tu PIN para continuar.
+              </p>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={adminPin}
+                onChange={(event) =>
+                  setAdminPin(event.target.value.replace(/\D/g, ""))
+                }
+                className="mb-3"
+              />
+              {adminAction.type === "reject" && (
+                <Textarea
+                  value={rejectionNote}
+                  onChange={(event) => setRejectionNote(event.target.value)}
+                  placeholder="Motivo opcional del rechazo"
+                  className="mb-3"
+                />
+              )}
+              {adminError && (
+                <p className="text-sm text-red-500 font-semibold mb-2">
+                  {adminError}
+                </p>
+              )}
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setAdminAction(null);
+                    setAdminPin("");
+                    setAdminError("");
+                    setRejectionNote("");
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                  onClick={handleAdminConfirm}
+                >
+                  Confirmar
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {taskFormOpen && (
+          <motion.div
+            className="fixed inset-0 bg-black/40 flex items-center justify-center px-6 z-30"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Card className="w-full max-w-md p-6 bg-white">
+              <h3 className="text-lg font-bold text-[#12130F] mb-3">
+                {taskFormMode === "create" ? "Nueva tarea" : "Editar tarea"}
+              </h3>
+              <div className="space-y-3">
+                <Input
+                  value={taskForm.title}
+                  onChange={(event) =>
+                    setTaskForm((prev) => ({ ...prev, title: event.target.value }))
+                  }
+                  placeholder="Título"
+                />
+                <Textarea
+                  value={taskForm.description}
+                  onChange={(event) =>
+                    setTaskForm((prev) => ({
+                      ...prev,
+                      description: event.target.value
+                    }))
+                  }
+                  placeholder="Descripción opcional"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    type="number"
+                    value={taskForm.points}
+                    onChange={(event) =>
+                      setTaskForm((prev) => ({
+                        ...prev,
+                        points: Number(event.target.value)
+                      }))
+                    }
+                    placeholder="Puntos"
+                  />
+                  <Input
+                    type="number"
+                    value={taskForm.xp}
+                    onChange={(event) =>
+                      setTaskForm((prev) => ({
+                        ...prev,
+                        xp: Number(event.target.value)
+                      }))
+                    }
+                    placeholder="XP"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["daily", "weekly", "once"] as TaskFrequency[]).map((freq) => (
+                    <Button
+                      key={freq}
+                      variant={taskForm.frequency === freq ? "default" : "secondary"}
+                      onClick={() =>
+                        setTaskForm((prev) => ({ ...prev, frequency: freq }))
+                      }
+                    >
+                      {frequencyLabels[freq]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 mt-4">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setTaskFormOpen(false);
+                    setEditingTaskId(null);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                  onClick={handleSubmitTaskForm}
+                >
+                  Guardar
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showHistory && (
+          <motion.div
+            className="fixed inset-0 bg-black/40 flex items-center justify-center px-6 z-30"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Card className="w-full max-w-md p-6 bg-white">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-[#12130F]">Historial</h3>
+                <Button variant="ghost" onClick={() => setShowHistory(false)}>
+                  Cerrar
+                </Button>
+              </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {currentUserClaims.length === 0 && (
+                  <p className="text-sm text-[#386FA4]">
+                    Todavía no hay tareas registradas.
+                  </p>
+                )}
+                {currentUserClaims.map((claim) => {
+                  const task = tasks.find((item) => item.id === claim.taskId);
+                  return (
+                    <div
+                      key={claim.id}
+                      className="p-3 border rounded-lg border-[#386FA4]/20"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-[#12130F]">
+                          {task?.title ?? "Tarea"}
+                        </p>
+                        <span className="text-xs text-[#386FA4]">
+                          {formatDate(claim.timestamp)} {formatTime(claim.timestamp)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        {claim.status === "pending" && (
+                          <Badge className="bg-amber-100 text-amber-700 border-0">
+                            <Clock className="w-3 h-3 mr-1" />
+                            Pendiente
+                          </Badge>
+                        )}
+                        {claim.status === "approved" && (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-0">
+                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                            Aprobada
+                          </Badge>
+                        )}
+                        {claim.status === "rejected" && (
+                          <Badge className="bg-red-100 text-red-700 border-0">
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Rechazada
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
