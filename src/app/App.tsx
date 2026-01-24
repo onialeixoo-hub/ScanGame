@@ -8,6 +8,7 @@ import { ProductDetail } from "./components/ProductDetail";
 import { ScanResult } from "./components/ScanResult";
 import { Scanner } from "./components/Scanner";
 import { Tasks } from "./components/Tasks";
+import { Button } from "./components/ui/button";
 import type {
   AppCategory,
   CollectedProduct,
@@ -124,6 +125,12 @@ export default function App() {
   });
   const [activeTab, setActiveTab] = useState<"home" | "collection" | "tasks">("home");
   const [showScanner, setShowScanner] = useState(false);
+  const [scanPopup, setScanPopup] = useState<{
+    title: string;
+    message: string;
+    details: string[];
+    ctaLabel: string;
+  } | null>(null);
   const [scannedProduct, setScannedProduct] = useState<{
     barcode: string;
     name: string;
@@ -220,6 +227,15 @@ export default function App() {
     const bonusStreak = isFirstScanToday ? streakBonusByDays(nextScanStreak) : 0;
     const xpReward = duplicateToday ? 0 : baseReward + bonusDaily + bonusStreak;
 
+    if (duplicateToday) {
+      setScanPopup({
+        title: "Ya escaneaste este producto hoy",
+        message: "Volvé mañana para ganar puntos extra.",
+        details: ["Escaneo repetido en el día: 0 XP"],
+        ctaLabel: "Entendido"
+      });
+    }
+
     setScannedProduct({
       barcode,
       name,
@@ -307,6 +323,36 @@ export default function App() {
         }
       };
     });
+
+    const baseReward = Math.max(
+      scannedProduct.xpReward - scannedProduct.bonusDaily - scannedProduct.bonusStreak,
+      0
+    );
+    const rewardLines = [
+      baseReward > 0 ? `Base: +${baseReward} XP` : null,
+      scannedProduct.bonusDaily > 0
+        ? `Bonus primer producto del día: +${scannedProduct.bonusDaily} XP`
+        : null,
+      scannedProduct.bonusStreak > 0
+        ? `Bonus racha: +${scannedProduct.bonusStreak} XP`
+        : null
+    ].filter(Boolean) as string[];
+
+    if (scannedProduct.xpReward === 0) {
+      setScanPopup({
+        title: "Ya escaneaste este producto hoy",
+        message: "Volvé mañana para ganar puntos extra.",
+        details: ["Escaneo repetido en el día: 0 XP"],
+        ctaLabel: "Entendido"
+      });
+    } else {
+      setScanPopup({
+        title: "¡Felicitaciones!",
+        message: `Ganaste ${scannedProduct.xpReward} XP por el escaneo.`,
+        details: rewardLines,
+        ctaLabel: "Seguir jugando"
+      });
+    }
 
     setScannedProduct(null);
     setActiveTab("collection");
@@ -515,6 +561,32 @@ export default function App() {
 
   return (
     <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
+      {scanPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
+          <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl">
+            <div className="rounded-t-3xl bg-gradient-to-br from-indigo-500 to-blue-500 px-6 py-8 text-center text-white">
+              <p className="text-2xl font-semibold">{scanPopup.title}</p>
+              <p className="mt-2 text-sm text-white/90">{scanPopup.message}</p>
+            </div>
+            <div className="px-6 py-5 text-left">
+              <ul className="space-y-2 text-sm text-slate-600">
+                {scanPopup.details.map((detail) => (
+                  <li key={detail} className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-indigo-500" />
+                    {detail}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                onClick={() => setScanPopup(null)}
+                className="mt-6 w-full bg-indigo-500 text-white hover:bg-indigo-600"
+              >
+                {scanPopup.ctaLabel}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="pb-20 max-w-md mx-auto bg-[#E2DADB] min-h-screen relative shadow-2xl overflow-hidden">
         <AnimatePresence mode="wait">
           {showScanner ? (
