@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { Camera, X, Zap } from "lucide-react";
+import { Camera, Flashlight, FlashlightOff, Lock, X, Zap } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 
 interface ScannerProps {
@@ -11,19 +11,41 @@ interface ScannerProps {
 export function Scanner({ onScanComplete, onClose }: ScannerProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
+  const [permissionStatus, setPermissionStatus] = useState<
+    "checking" | "granted" | "denied"
+  >("checking");
+  const [flashEnabled, setFlashEnabled] = useState(false);
+  const [scanLocked, setScanLocked] = useState(false);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const requestCamera = async () => {
+    setPermissionStatus("checking");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setPermissionStatus("denied");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } }
+      });
+      streamRef.current = stream;
+      setPermissionStatus("granted");
+    } catch (error) {
+      setPermissionStatus("denied");
+    }
+  };
 
   // Simulación de escaneo automático
   useEffect(() => {
-    if (isScanning) {
+    if (isScanning && !scanLocked) {
       const interval = setInterval(() => {
         setScanProgress(prev => {
           if (prev >= 100) {
             clearInterval(interval);
             // Generar código de barras simulado
             const mockBarcode = `${Math.floor(Math.random() * 900000000000) + 100000000000}`;
-            setTimeout(() => {
-              onScanComplete(mockBarcode);
-            }, 300);
+            setScanLocked(true);
+            setTimeout(() => onScanComplete(mockBarcode), 300);
             return 100;
           }
           return prev + 5;
@@ -33,6 +55,38 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
       return () => clearInterval(interval);
     }
   }, [isScanning, onScanComplete]);
+
+  useEffect(() => {
+    requestCamera();
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  const handleToggleFlash = async () => {
+    const [track] = streamRef.current?.getVideoTracks() ?? [];
+    if (!track) {
+      setFlashEnabled((prev) => !prev);
+      return;
+    }
+
+    try {
+      const capabilities = track.getCapabilities() as MediaTrackCapabilities & {
+        torch?: boolean;
+      };
+      if (!capabilities.torch) {
+        setFlashEnabled((prev) => !prev);
+        return;
+      }
+      const nextValue = !flashEnabled;
+      await track.applyConstraints({
+        advanced: [{ torch: nextValue }]
+      } as MediaTrackConstraints);
+      setFlashEnabled(nextValue);
+    } catch (error) {
+      setFlashEnabled((prev) => !prev);
+    }
+  };
 
   const handleStartScan = () => {
     setIsScanning(true);
@@ -44,14 +98,29 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
         <h2 className="text-white text-lg font-semibold">Escaneá el código de barras</h2>
-        <Button
-          onClick={onClose}
-          variant="ghost"
-          size="icon"
-          className="text-white hover:bg-white/20"
-        >
-          <X className="w-6 h-6" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleToggleFlash}
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/20"
+            disabled={permissionStatus !== "granted"}
+          >
+            {flashEnabled ? (
+              <FlashlightOff className="w-6 h-6" />
+            ) : (
+              <Flashlight className="w-6 h-6" />
+            )}
+          </Button>
+          <Button
+            onClick={onClose}
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/20"
+          >
+            <X className="w-6 h-6" />
+          </Button>
+        </div>
       </div>
 
       {/* Camera View Simulation */}
@@ -63,6 +132,21 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
 
         {/* Scanning Overlay */}
         <div className="relative z-10 w-full max-w-sm px-6">
+          {permissionStatus !== "granted" && (
+            <div className="mb-4 rounded-xl bg-white/10 border border-white/20 p-4 text-white text-sm">
+              {permissionStatus === "checking"
+                ? "Solicitando permiso de cámara..."
+                : "Necesitamos permiso de cámara para escanear."}
+              {permissionStatus === "denied" && (
+                <Button
+                  className="mt-3 w-full bg-white/20 hover:bg-white/30 text-white"
+                  onClick={requestCamera}
+                >
+                  Volver a intentar
+                </Button>
+              )}
+            </div>
+          )}
           {/* Scan Frame */}
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
@@ -99,7 +183,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
               <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-400 rounded-br-2xl" />
 
               {/* Scanning Line */}
-              {isScanning && (
+              {isScanning && !scanLocked && (
                 <motion.div
                   className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-blue-400 to-transparent shadow-lg shadow-blue-400"
                   initial={{ top: 0 }}
@@ -135,10 +219,17 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
                 <Button
                   onClick={handleStartScan}
                   className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold h-12"
+                  disabled={permissionStatus !== "granted"}
                 >
                   <Zap className="w-5 h-5 mr-2" />
                   Iniciar Escaneo
                 </Button>
+                {permissionStatus !== "granted" && (
+                  <p className="text-xs text-white/70 flex items-center justify-center gap-2">
+                    <Lock className="w-4 h-4" />
+                    Permiso requerido para escanear
+                  </p>
+                )}
               </>
             ) : (
               <motion.div
