@@ -8,6 +8,7 @@ import { ProductDetail } from "./components/ProductDetail";
 import { ScanResult } from "./components/ScanResult";
 import { Scanner } from "./components/Scanner";
 import { Tasks } from "./components/Tasks";
+import { Button } from "./components/ui/button";
 import type {
   AppCategory,
   CollectedProduct,
@@ -124,6 +125,12 @@ export default function App() {
   });
   const [activeTab, setActiveTab] = useState<"home" | "collection" | "tasks">("home");
   const [showScanner, setShowScanner] = useState(false);
+  const [scanPopup, setScanPopup] = useState<{
+    title: string;
+    message: string;
+    details: string[];
+    ctaLabel: string;
+  } | null>(null);
   const [scannedProduct, setScannedProduct] = useState<{
     barcode: string;
     name: string;
@@ -183,9 +190,12 @@ export default function App() {
       "ingredients_text",
       "allergens"
     ].join(",");
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
     const response = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${barcode}?fields=${fields}`
-    );
+      `https://world.openfoodfacts.org/api/v2/product/${barcode}?fields=${fields}`,
+      { signal: controller.signal }
+    ).finally(() => window.clearTimeout(timeoutId));
     const data = await response.json();
     return data?.product ?? null;
   };
@@ -237,6 +247,27 @@ export default function App() {
       ingredients: productFromOff?.ingredients_text_es || productFromOff?.ingredients_text,
       allergens: productFromOff?.allergens
     });
+    const rewardLines = [
+      baseReward > 0 ? `Base: +${baseReward} XP` : null,
+      bonusDaily > 0 ? `Bonus primer producto del día: +${bonusDaily} XP` : null,
+      bonusStreak > 0 ? `Bonus racha: +${bonusStreak} XP` : null
+    ].filter(Boolean) as string[];
+
+    if (xpReward === 0) {
+      setScanPopup({
+        title: "Ya escaneaste este producto hoy",
+        message: "Volvé mañana para ganar puntos extra.",
+        details: ["Escaneo repetido en el día: 0 XP"],
+        ctaLabel: "Entendido"
+      });
+    } else {
+      setScanPopup({
+        title: "¡Felicitaciones!",
+        message: `Ganaste ${xpReward} XP por el escaneo.`,
+        details: rewardLines,
+        ctaLabel: "Seguir jugando"
+      });
+    }
     setIsFetchingProduct(false);
   };
 
@@ -515,6 +546,32 @@ export default function App() {
 
   return (
     <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
+      {scanPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
+          <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl">
+            <div className="rounded-t-3xl bg-gradient-to-br from-indigo-500 to-blue-500 px-6 py-8 text-center text-white">
+              <p className="text-2xl font-semibold">{scanPopup.title}</p>
+              <p className="mt-2 text-sm text-white/90">{scanPopup.message}</p>
+            </div>
+            <div className="px-6 py-5 text-left">
+              <ul className="space-y-2 text-sm text-slate-600">
+                {scanPopup.details.map((detail) => (
+                  <li key={detail} className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-indigo-500" />
+                    {detail}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                onClick={() => setScanPopup(null)}
+                className="mt-6 w-full bg-indigo-500 text-white hover:bg-indigo-600"
+              >
+                {scanPopup.ctaLabel}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="pb-20 max-w-md mx-auto bg-[#E2DADB] min-h-screen relative shadow-2xl overflow-hidden">
         <AnimatePresence mode="wait">
           {showScanner ? (
