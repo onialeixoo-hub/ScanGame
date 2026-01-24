@@ -4,6 +4,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import type { User } from "@/app/types";
+import logo from "@/assets/logo-scangame.svg";
 
 interface LoginScreenProps {
   users: User[];
@@ -37,10 +38,10 @@ export function LoginScreen({ users, onLogin }: LoginScreenProps) {
     <div className="min-h-screen bg-[#E2DADB] flex items-center justify-center px-6">
       <Card className="w-full max-w-sm p-6 bg-white/95 border-2 border-[#386FA4]/20 shadow-xl">
         <div className="text-center mb-6">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#386FA4] to-[#2d5a85] flex items-center justify-center mx-auto mb-3 text-2xl text-white shadow-lg">
-            🔐
+          <div className="w-24 h-24 rounded-3xl bg-white flex items-center justify-center mx-auto mb-3 shadow-lg border border-[#386FA4]/20">
+            <img src={logo} alt="ScanGame" className="w-20 h-20 object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-[#12130F]">Bienvenido</h1>
+          <h1 className="text-2xl font-bold text-[#12130F]">Bienvenido a ScanGame</h1>
           <p className="text-sm text-[#386FA4]">Ingresá con tu usuario y PIN</p>
         </div>
 

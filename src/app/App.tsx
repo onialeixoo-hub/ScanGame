@@ -20,18 +20,25 @@ import type {
   UserProgress
 } from "./types";
 import { normalizeCategory, rarityBaseXp, rarityFromBarcode, streakBonusByDays } from "./lib/products";
+import avatarHoodie from "@/assets/avatars/avatar-hoodie.svg";
+import avatarHeadset from "@/assets/avatars/avatar-headset.svg";
+import avatarCap from "@/assets/avatars/avatar-cap.svg";
+import avatarPlay from "@/assets/avatars/avatar-play.svg";
+import avatarPepsi from "@/assets/avatars/avatar-pepsi.svg";
+import avatarCamera from "@/assets/avatars/avatar-camera.svg";
+import avatarGlasses from "@/assets/avatars/avatar-glasses.svg";
 
 const DAILY_GOAL = 3;
 const BONUS_POINTS = 50;
 
-const users: User[] = [
+const initialUsers: User[] = [
   {
     id: "user-1",
     name: "Marti",
     username: "martialeixo",
     pin: "1508",
     role: "user",
-    avatar: "🦸"
+    avatar: avatarHoodie
   },
   {
     id: "admin-1",
@@ -39,7 +46,7 @@ const users: User[] = [
     username: "onialeixo",
     pin: "2601",
     role: "admin",
-    avatar: "🛡️"
+    avatar: avatarHeadset
   }
 ];
 
@@ -96,6 +103,7 @@ const PROGRESS_STORAGE_KEY = "scanGame.progress";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>(initialUsers);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [claims, setClaims] = useState<TaskClaim[]>([]);
   const [progressByUser, setProgressByUser] = useState<Record<string, UserProgress>>(
@@ -501,6 +509,24 @@ export default function App() {
     }));
   };
 
+  const handleUpdateProfileName = (name: string) => {
+    if (!currentUser) return;
+    setCurrentUser((prev) => (prev ? { ...prev, name } : prev));
+    setUsers((prev) =>
+      prev.map((user) => (user.id === currentUser.id ? { ...user, name } : user))
+    );
+  };
+
+  const handleUpdateAvatar = (avatar: string) => {
+    if (!currentUser) return;
+    setCurrentUser((prev) => (prev ? { ...prev, avatar } : prev));
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.id === currentUser.id ? { ...user, avatar } : user
+      )
+    );
+  };
+
   const getLevelInfo = (xp: number) => {
     let level = 1;
     let threshold = 1000;
@@ -568,9 +594,15 @@ export default function App() {
             tasks={tasks}
             claims={claims}
             progress={activeProgress}
+            productsCount={userCollection.length}
+            categoriesCount={
+              new Set(userCollection.map((product) => product.appCategory)).size
+            }
             dailyGoal={DAILY_GOAL}
             bonusPoints={BONUS_POINTS}
             onLogout={() => setCurrentUser(null)}
+            onUpdateProfileName={handleUpdateProfileName}
+            onUpdateAvatar={handleUpdateAvatar}
             onCreateClaim={handleCreateClaim}
             onApproveClaim={handleApproveClaim}
             onRejectClaim={handleRejectClaim}
@@ -673,9 +705,15 @@ export default function App() {
               tasks={tasks}
               claims={claims}
               progress={activeProgress}
+              productsCount={userCollection.length}
+              categoriesCount={
+                new Set(userCollection.map((product) => product.appCategory)).size
+              }
               dailyGoal={DAILY_GOAL}
               bonusPoints={BONUS_POINTS}
               onLogout={() => setCurrentUser(null)}
+              onUpdateProfileName={handleUpdateProfileName}
+              onUpdateAvatar={handleUpdateAvatar}
               onCreateClaim={handleCreateClaim}
               onApproveClaim={handleApproveClaim}
               onRejectClaim={handleRejectClaim}

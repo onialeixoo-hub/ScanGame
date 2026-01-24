@@ -89,9 +89,9 @@ export function Home({
               initial={{ scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: "spring", duration: 0.8, delay: 0.2 }}
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-[#386FA4] to-[#2d5a85] flex items-center justify-center text-3xl shadow-lg border-4 border-white"
+              className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg border-4 border-white overflow-hidden"
             >
-              {avatar}
+              <img src={avatar} alt={`Avatar de ${username}`} className="w-full h-full object-cover" />
             </motion.div>
             
             {/* Info */}
