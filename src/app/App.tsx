@@ -9,6 +9,7 @@ import { ProductDetail } from "./components/ProductDetail";
 import { ScanResult } from "./components/ScanResult";
 import { Scanner } from "./components/Scanner";
 import { Tasks } from "./components/Tasks";
+import { Button } from "./components/ui/button";
 import type {
   AppCategory,
   CollectedProduct,
@@ -226,6 +227,15 @@ export default function App() {
     const bonusDaily = isFirstScanToday ? 40 : 0;
     const bonusStreak = isFirstScanToday ? streakBonusByDays(nextScanStreak) : 0;
     const xpReward = duplicateToday ? 0 : baseReward + bonusDaily + bonusStreak;
+
+    if (duplicateToday) {
+      setScanPopup({
+        title: "Ya escaneaste este producto hoy",
+        message: "Volvé mañana para ganar puntos extra.",
+        details: ["Escaneo repetido en el día: 0 XP"],
+        ctaLabel: "Entendido"
+      });
+    }
 
     setScannedProduct({
       barcode,

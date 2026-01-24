@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { motion } from "motion/react";
 import { Camera, Flashlight, FlashlightOff, Lock, X, Zap } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -28,6 +28,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
   const [scanLocked, setScanLocked] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [manualBarcode, setManualBarcode] = useState("");
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
@@ -45,6 +46,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
   const requestCamera = async () => {
     setPermissionStatus("checking");
     setScanError(null);
+    setPhotoError(null);
     if (!navigator.mediaDevices?.getUserMedia) {
       setPermissionStatus("denied");
       return;
@@ -182,6 +184,29 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
     onScanComplete(manualBarcode.trim());
   };
 
+  const handlePhotoUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const [file] = event.target.files ?? [];
+    event.target.value = "";
+    if (!file) return;
+    if (!detectorRef.current) {
+      setPhotoError("Tu navegador no soporta lectura desde foto.");
+      return;
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      const codes = await detectorRef.current.detect(bitmap);
+      if (codes.length > 0) {
+        setScanLocked(true);
+        stopCamera();
+        onScanComplete(codes[0].rawValue);
+        return;
+      }
+      setPhotoError("No se detectó ningún código en la foto. Probá otra imagen.");
+    } catch (error) {
+      setPhotoError("No se pudo procesar la foto. Probá nuevamente.");
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-900 to-slate-800 z-50">
       {/* Header */}
@@ -213,7 +238,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
       </div>
 
       {/* Camera View */}
-      <div className="relative w-full h-full flex items-center justify-center">
+      <div className="relative w-full h-full flex items-center justify-center overflow-y-auto py-20">
         <div className="absolute inset-0">
           <video
             ref={videoRef}
@@ -225,7 +250,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
         </div>
 
         {/* Scanning Overlay */}
-        <div className="relative z-10 w-full max-w-sm px-6">
+        <div className="relative z-10 w-full max-w-sm px-6 pb-10">
           {permissionStatus !== "granted" && (
             <div className="mb-4 rounded-xl bg-white/10 border border-white/20 p-4 text-white text-sm">
               {permissionStatus === "checking"
@@ -244,6 +269,11 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
           {scanError && (
             <div className="mb-4 rounded-xl bg-amber-500/20 border border-amber-400/40 p-4 text-amber-100 text-sm">
               {scanError}
+            </div>
+          )}
+          {photoError && (
+            <div className="mb-4 rounded-xl bg-amber-500/20 border border-amber-400/40 p-4 text-amber-100 text-sm">
+              {photoError}
             </div>
           )}
           {/* Scan Frame */}
@@ -380,15 +410,29 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
               </Button>
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Tips */}
-      <div className="absolute bottom-8 left-0 right-0 px-6">
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
-          <p className="text-white/80 text-xs text-center">
-            💡 Tip: Asegurate de que el código esté bien iluminado y enfocado
-          </p>
+          <div className="mt-6 space-y-3 rounded-2xl border border-white/10 bg-white/10 p-4 text-white">
+            <p className="text-sm font-semibold">Escanear desde una foto</p>
+            <label className="flex w-full cursor-pointer items-center justify-center rounded-xl border border-dashed border-white/30 px-3 py-3 text-sm text-white/80 transition hover:bg-white/10">
+              Sacá una foto o subí una imagen
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
+            </label>
+            <p className="text-xs text-white/70">
+              Ideal si querés usar la cámara propia del teléfono.
+            </p>
+          </div>
+
+          <div className="mt-6 bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
+            <p className="text-white/80 text-xs text-center">
+              💡 Tip: Asegurate de que el código esté bien iluminado y enfocado
+            </p>
+          </div>
         </div>
       </div>
     </div>
