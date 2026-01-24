@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
-import { Tasks } from "./components/Tasks";
+import { AnimatePresence } from "motion/react";
+import { BottomNav } from "./components/BottomNav";
+import { Collection } from "./components/Collection";
+import { Home } from "./components/Home";
 import { LoginScreen } from "./components/LoginScreen";
+import { ScanResult } from "./components/ScanResult";
+import { Scanner } from "./components/Scanner";
+import { Tasks } from "./components/Tasks";
 import type { Task, TaskClaim, User, UserProgress } from "./types";
 
 const DAILY_GOAL = 3;
@@ -78,8 +84,46 @@ export default function App() {
   const [progressByUser, setProgressByUser] = useState<Record<string, UserProgress>>({
     "user-1": initialProgress
   });
+  const [activeTab, setActiveTab] = useState<"home" | "collection" | "tasks">(
+    "home"
+  );
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannedProduct, setScannedProduct] = useState<{
+    name: string;
+    category: string;
+    barcode: string;
+    points: number;
+    xp: number;
+    rarity: "común" | "raro" | "épico" | "legendario";
+  } | null>(null);
+  const [isNewProduct, setIsNewProduct] = useState(true);
 
   const todayKey = useMemo(() => new Date().toDateString(), []);
+
+  const handleScan = (barcode: string) => {
+    setShowScanner(false);
+    setTimeout(() => {
+      setScannedProduct({
+        name: "Producto Misterioso",
+        category: "Snacks",
+        barcode,
+        points: 50,
+        xp: 25,
+        rarity: "raro"
+      });
+      setIsNewProduct(Math.random() > 0.5);
+    }, 500);
+  };
+
+  const handleAddToCollection = () => {
+    setScannedProduct(null);
+    setActiveTab("collection");
+  };
+
+  const handleGoHome = () => {
+    setScannedProduct(null);
+    setActiveTab("home");
+  };
 
   const handleCreateClaim = (taskId: string, note: string) => {
     if (!currentUser) return;
@@ -193,30 +237,131 @@ export default function App() {
     ? progressByUser[currentUser.id] ?? initialProgress
     : initialProgress;
 
+  const currentUserClaims = currentUser
+    ? claims.filter((claim) => claim.userId === currentUser.id)
+    : [];
+
+  const approvedTodayCount = currentUserClaims.filter(
+    (claim) =>
+      claim.status === "approved" &&
+      claim.approvedAt &&
+      new Date(claim.approvedAt).toDateString() === todayKey
+  ).length;
+
+  const homeTasks = tasks.map((task) => {
+    const latestClaim = currentUserClaims
+      .filter((claim) => claim.taskId === task.id)
+      .sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )[0];
+    const isCompleted = latestClaim?.status === "approved";
+
+    return {
+      id: task.id,
+      title: task.title,
+      xpReward: task.xp,
+      pointsReward: task.points,
+      completed: isCompleted
+    };
+  });
+
   if (!currentUser) {
     return <LoginScreen users={users} onLogin={setCurrentUser} />;
+  }
+
+  if (currentUser.role === "admin") {
+    return (
+      <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
+        <div className="pb-20 max-w-md mx-auto bg-[#E2DADB] min-h-screen relative shadow-2xl overflow-hidden">
+          <Tasks
+            currentUser={currentUser}
+            users={users}
+            tasks={tasks}
+            claims={claims}
+            progress={activeProgress}
+            dailyGoal={DAILY_GOAL}
+            bonusPoints={BONUS_POINTS}
+            onLogout={() => setCurrentUser(null)}
+            onCreateClaim={handleCreateClaim}
+            onApproveClaim={handleApproveClaim}
+            onRejectClaim={handleRejectClaim}
+            onCreateTask={handleCreateTask}
+            onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
+            onResetProgress={handleResetProgress}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
       <div className="pb-20 max-w-md mx-auto bg-[#E2DADB] min-h-screen relative shadow-2xl overflow-hidden">
-        <Tasks
-          currentUser={currentUser}
-          users={users}
-          tasks={tasks}
-          claims={claims}
-          progress={activeProgress}
-          dailyGoal={DAILY_GOAL}
-          bonusPoints={BONUS_POINTS}
-          onLogout={() => setCurrentUser(null)}
-          onCreateClaim={handleCreateClaim}
-          onApproveClaim={handleApproveClaim}
-          onRejectClaim={handleRejectClaim}
-          onCreateTask={handleCreateTask}
-          onUpdateTask={handleUpdateTask}
-          onDeleteTask={handleDeleteTask}
-          onResetProgress={handleResetProgress}
-        />
+        <AnimatePresence mode="wait">
+          {showScanner ? (
+            <Scanner
+              key="scanner"
+              onScanComplete={handleScan}
+              onClose={() => setShowScanner(false)}
+            />
+          ) : scannedProduct ? (
+            <ScanResult
+              key="result"
+              product={scannedProduct}
+              isNewProduct={isNewProduct}
+              onAddToCollection={handleAddToCollection}
+              onGoHome={handleGoHome}
+            />
+          ) : activeTab === "home" ? (
+            <Home
+              userLevel={Math.floor(activeProgress.xp / 1000) + 1}
+              currentXP={activeProgress.xp}
+              xpToNextLevel={Math.ceil((activeProgress.xp + 1) / 1000) * 1000}
+              totalPoints={activeProgress.points}
+              dailyStreak={activeProgress.streak}
+              username={currentUser.name}
+              avatar={currentUser.avatar}
+              activeTasks={homeTasks.filter((task) => !task.completed).length}
+              totalProducts={12}
+              categoriesCount={4}
+              completedTasksToday={approvedTodayCount}
+              tasks={homeTasks}
+              onScanClick={() => setShowScanner(true)}
+              onCollectionClick={() => setActiveTab("collection")}
+              onTasksClick={() => setActiveTab("tasks")}
+              onCompleteTask={() => setActiveTab("tasks")}
+            />
+          ) : activeTab === "collection" ? (
+            <Collection />
+          ) : activeTab === "tasks" ? (
+            <Tasks
+              currentUser={currentUser}
+              users={users}
+              tasks={tasks}
+              claims={claims}
+              progress={activeProgress}
+              dailyGoal={DAILY_GOAL}
+              bonusPoints={BONUS_POINTS}
+              onLogout={() => setCurrentUser(null)}
+              onCreateClaim={handleCreateClaim}
+              onApproveClaim={handleApproveClaim}
+              onRejectClaim={handleRejectClaim}
+              onCreateTask={handleCreateTask}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
+              onResetProgress={handleResetProgress}
+            />
+          ) : null}
+        </AnimatePresence>
+
+        {!showScanner && !scannedProduct && (
+          <BottomNav
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            activeTasks={homeTasks.filter((task) => !task.completed).length}
+          />
+        )}
       </div>
     </div>
   );

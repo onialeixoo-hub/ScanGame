@@ -250,7 +250,7 @@ export function Tasks({
               className="bg-white/20 text-white hover:bg-white/30"
               onClick={onLogout}
             >
-              Salir
+              Cerrar sesión
             </Button>
           </div>
         </div>
