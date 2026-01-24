@@ -600,9 +600,6 @@ export default function App() {
             }
             dailyGoal={DAILY_GOAL}
             bonusPoints={BONUS_POINTS}
-            onLogout={() => setCurrentUser(null)}
-            onUpdateProfileName={handleUpdateProfileName}
-            onUpdateAvatar={handleUpdateAvatar}
             onCreateClaim={handleCreateClaim}
             onApproveClaim={handleApproveClaim}
             onRejectClaim={handleRejectClaim}
@@ -692,6 +689,9 @@ export default function App() {
               onCollectionClick={() => setActiveTab("collection")}
               onTasksClick={() => setActiveTab("tasks")}
               onCompleteTask={() => setActiveTab("tasks")}
+              onLogout={() => setCurrentUser(null)}
+              onUpdateProfileName={handleUpdateProfileName}
+              onUpdateAvatar={handleUpdateAvatar}
             />
           ) : activeTab === "collection" ? (
             <Collection
@@ -711,9 +711,6 @@ export default function App() {
               }
               dailyGoal={DAILY_GOAL}
               bonusPoints={BONUS_POINTS}
-              onLogout={() => setCurrentUser(null)}
-              onUpdateProfileName={handleUpdateProfileName}
-              onUpdateAvatar={handleUpdateAvatar}
               onCreateClaim={handleCreateClaim}
               onApproveClaim={handleApproveClaim}
               onRejectClaim={handleRejectClaim}
