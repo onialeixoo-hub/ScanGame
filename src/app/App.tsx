@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "motion/react";
+import { Toaster, toast } from "sonner";
 import { BottomNav } from "./components/BottomNav";
 import { Collection } from "./components/Collection";
 import { Home } from "./components/Home";
