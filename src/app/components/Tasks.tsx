@@ -7,14 +7,23 @@ import {
   Edit2,
   Flag,
   History,
-  ListTodo,
   Lock,
+  Menu,
   Plus,
+  Settings,
   ShieldCheck,
   Trash2,
   UserRound,
+  UserRoundCog,
   XCircle
 } from "lucide-react";
+import avatarHoodie from "@/assets/avatars/avatar-hoodie.svg";
+import avatarHeadset from "@/assets/avatars/avatar-headset.svg";
+import avatarCap from "@/assets/avatars/avatar-cap.svg";
+import avatarPlay from "@/assets/avatars/avatar-play.svg";
+import avatarPepsi from "@/assets/avatars/avatar-pepsi.svg";
+import avatarCamera from "@/assets/avatars/avatar-camera.svg";
+import avatarGlasses from "@/assets/avatars/avatar-glasses.svg";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
@@ -29,6 +38,8 @@ interface TasksProps {
   tasks: Task[];
   claims: TaskClaim[];
   progress: UserProgress;
+  productsCount: number;
+  categoriesCount: number;
   dailyGoal: number;
   bonusPoints: number;
   onCreateClaim: (taskId: string, note: string) => void;
@@ -64,6 +75,8 @@ export function Tasks({
   tasks,
   claims,
   progress,
+  productsCount,
+  categoriesCount,
   dailyGoal,
   bonusPoints,
   onCreateClaim,
@@ -79,6 +92,10 @@ export function Tasks({
     "pending"
   );
   const [showHistory, setShowHistory] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [pendingName, setPendingName] = useState(currentUser.name);
   const [claimModalTask, setClaimModalTask] = useState<Task | null>(null);
   const [claimNote, setClaimNote] = useState("");
   const [adminAction, setAdminAction] = useState<{
