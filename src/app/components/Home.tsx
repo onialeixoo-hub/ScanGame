@@ -1,8 +1,17 @@
-import { motion } from "motion/react";
-import { Scan, Star, Flame, Trophy, ListTodo, Package, Grid3x3, Sparkles, Check, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { Scan, Star, Flame, Trophy, ListTodo, Package, Grid3x3, Sparkles, Check, ArrowRight, Menu, Settings, UserRoundCog, XCircle } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Progress } from "@/app/components/ui/progress";
+import { Input } from "@/app/components/ui/input";
+import avatarHoodie from "@/assets/avatars/avatar-hoodie.svg";
+import avatarHeadset from "@/assets/avatars/avatar-headset.svg";
+import avatarCap from "@/assets/avatars/avatar-cap.svg";
+import avatarPlay from "@/assets/avatars/avatar-play.svg";
+import avatarPepsi from "@/assets/avatars/avatar-pepsi.svg";
+import avatarCamera from "@/assets/avatars/avatar-camera.svg";
+import avatarGlasses from "@/assets/avatars/avatar-glasses.svg";
 
 interface Task {
   id: string;
@@ -29,6 +38,9 @@ interface HomeProps {
   onCollectionClick: () => void;
   onTasksClick: () => void;
   onCompleteTask: (taskId: string) => void;
+  onLogout: () => void;
+  onUpdateProfileName: (name: string) => void;
+  onUpdateAvatar: (avatar: string) => void;
 }
 
 export function Home({
@@ -47,8 +59,26 @@ export function Home({
   onScanClick,
   onCollectionClick,
   onTasksClick,
-  onCompleteTask
+  onCompleteTask,
+  onLogout,
+  onUpdateProfileName,
+  onUpdateAvatar
 }: HomeProps) {
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [pendingName, setPendingName] = useState(username);
+
+  const avatarOptions = [
+    { id: "hoodie", src: avatarHoodie, label: "Hoodie" },
+    { id: "headset", src: avatarHeadset, label: "Headset" },
+    { id: "cap", src: avatarCap, label: "Gorra" },
+    { id: "play", src: avatarPlay, label: "Gaming" },
+    { id: "pepsi", src: avatarPepsi, label: "Pepsi" },
+    { id: "camera", src: avatarCamera, label: "Cámara" },
+    { id: "glasses", src: avatarGlasses, label: "Lentes" }
+  ];
+
   const xpPercentage = (currentXP / xpToNextLevel) * 100;
   const todayTasks = tasks.filter(t => !t.completed).slice(0, 3); // Primeras 3 tareas del día
 
@@ -61,18 +91,27 @@ export function Home({
         transition={{ type: "spring", duration: 0.6 }}
         className="mb-6"
       >
-        <Button
-          onClick={onScanClick}
-          className="w-full h-24 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] hover:from-[#2d5a85] hover:to-[#386FA4] text-white font-bold text-2xl rounded-3xl shadow-2xl relative overflow-hidden group"
-        >
-          <motion.div
-            className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
-            animate={{ x: ["-100%", "100%"] }}
-            transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
-          />
-          <Scan className="w-10 h-10 mr-3" />
-          <span>Escanear Producto</span>
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setShowProfileMenu(true)}
+            size="icon"
+            className="h-16 w-16 rounded-2xl bg-white/90 text-[#386FA4] hover:bg-white"
+          >
+            <Menu className="w-7 h-7" />
+          </Button>
+          <Button
+            onClick={onScanClick}
+            className="w-full h-24 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] hover:from-[#2d5a85] hover:to-[#386FA4] text-white font-bold text-2xl rounded-3xl shadow-2xl relative overflow-hidden group"
+          >
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
+              animate={{ x: ["-100%", "100%"] }}
+              transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
+            />
+            <Scan className="w-10 h-10 mr-3" />
+            <span>Escanear Producto</span>
+          </Button>
+        </div>
       </motion.div>
 
       {/* Header Compacto - Avatar, Nombre, Nivel, Puntos */}
@@ -89,9 +128,9 @@ export function Home({
               initial={{ scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: "spring", duration: 0.8, delay: 0.2 }}
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-[#386FA4] to-[#2d5a85] flex items-center justify-center text-3xl shadow-lg border-4 border-white"
+              className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg border-4 border-white overflow-hidden"
             >
-              {avatar}
+              <img src={avatar} alt={`Avatar de ${username}`} className="w-full h-full object-cover" />
             </motion.div>
             
             {/* Info */}
@@ -265,6 +304,190 @@ export function Home({
           </Card>
         )}
       </motion.div>
+
+      <AnimatePresence>
+        {showProfileMenu && (
+          <motion.div
+            className="fixed inset-0 z-40 flex"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="flex-1 bg-black/40"
+              onClick={() => setShowProfileMenu(false)}
+            />
+            <motion.div
+              className="w-[82%] max-w-xs bg-gradient-to-b from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-2xl"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 260, damping: 30 }}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="h-14 w-14 rounded-full bg-white/20 flex items-center justify-center text-2xl">
+                    <img
+                      src={avatar}
+                      alt={`Avatar de ${username}`}
+                      className="h-full w-full object-cover rounded-full"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">{username}</p>
+                    <p className="text-xs text-white/80">Nivel {userLevel}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:bg-white/20"
+                  onClick={() => setShowProfileMenu(false)}
+                >
+                  <XCircle className="w-5 h-5" />
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2 mb-6">
+                <Button
+                  size="sm"
+                  className="bg-emerald-400 text-white hover:bg-emerald-500"
+                  onClick={() => setShowAvatarModal(true)}
+                >
+                  <UserRoundCog className="w-4 h-4 mr-2" />
+                  Avatar
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-white/20 text-white hover:bg-white/30"
+                  onClick={() => {
+                    setPendingName(username);
+                    setShowNameModal(true);
+                  }}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Nombre
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <Card className="bg-white/95 text-[#12130F] p-3">
+                  <p className="text-xs text-[#386FA4]">Puntos</p>
+                  <p className="text-lg font-bold">{totalPoints}</p>
+                </Card>
+                <Card className="bg-white/95 text-[#12130F] p-3">
+                  <p className="text-xs text-[#386FA4]">Racha</p>
+                  <p className="text-lg font-bold">{dailyStreak} días</p>
+                </Card>
+                <Card className="bg-white/95 text-[#12130F] p-3">
+                  <p className="text-xs text-[#386FA4]">Productos</p>
+                  <p className="text-lg font-bold">{totalProducts}</p>
+                </Card>
+                <Card className="bg-white/95 text-[#12130F] p-3">
+                  <p className="text-xs text-[#386FA4]">Categorías</p>
+                  <p className="text-lg font-bold">{categoriesCount}</p>
+                </Card>
+              </div>
+
+              <div className="mt-6">
+                <Button
+                  className="w-full bg-white text-[#386FA4] hover:bg-white/90"
+                  onClick={onLogout}
+                >
+                  Cerrar sesión
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showNameModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Card className="w-full max-w-sm p-6 bg-white">
+              <h3 className="text-lg font-bold text-[#12130F] mb-3">
+                Editar nombre de perfil
+              </h3>
+              <Input
+                value={pendingName}
+                onChange={(event) => setPendingName(event.target.value)}
+                placeholder="Nombre de perfil"
+                className="mb-4"
+              />
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={() => setShowNameModal(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                  onClick={() => {
+                    if (pendingName.trim()) {
+                      onUpdateProfileName(pendingName.trim());
+                      setShowNameModal(false);
+                    }
+                  }}
+                >
+                  Guardar
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAvatarModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Card className="w-full max-w-md p-6 bg-white">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-[#12130F]">
+                  Elegí tu avatar
+                </h3>
+                <Button variant="ghost" onClick={() => setShowAvatarModal(false)}>
+                  Cerrar
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {avatarOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`rounded-2xl border-2 p-2 transition ${
+                      avatar === option.src
+                        ? "border-[#386FA4] bg-[#386FA4]/10"
+                        : "border-transparent hover:border-[#386FA4]/40"
+                    }`}
+                    onClick={() => {
+                      onUpdateAvatar(option.src);
+                      setShowAvatarModal(false);
+                    }}
+                  >
+                    <img
+                      src={option.src}
+                      alt={option.label}
+                      className="w-full rounded-xl object-cover"
+                    />
+                    <p className="mt-2 text-xs text-[#386FA4] font-semibold">
+                      {option.label}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
