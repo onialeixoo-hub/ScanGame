@@ -191,9 +191,12 @@ export default function App() {
       "ingredients_text",
       "allergens"
     ].join(",");
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
     const response = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${barcode}?fields=${fields}`
-    );
+      `https://world.openfoodfacts.org/api/v2/product/${barcode}?fields=${fields}`,
+      { signal: controller.signal }
+    ).finally(() => window.clearTimeout(timeoutId));
     const data = await response.json();
     return data?.product ?? null;
   };
@@ -254,6 +257,27 @@ export default function App() {
       ingredients: productFromOff?.ingredients_text_es || productFromOff?.ingredients_text,
       allergens: productFromOff?.allergens
     });
+    const rewardLines = [
+      baseReward > 0 ? `Base: +${baseReward} XP` : null,
+      bonusDaily > 0 ? `Bonus primer producto del día: +${bonusDaily} XP` : null,
+      bonusStreak > 0 ? `Bonus racha: +${bonusStreak} XP` : null
+    ].filter(Boolean) as string[];
+
+    if (xpReward === 0) {
+      setScanPopup({
+        title: "Ya escaneaste este producto hoy",
+        message: "Volvé mañana para ganar puntos extra.",
+        details: ["Escaneo repetido en el día: 0 XP"],
+        ctaLabel: "Entendido"
+      });
+    } else {
+      setScanPopup({
+        title: "¡Felicitaciones!",
+        message: `Ganaste ${xpReward} XP por el escaneo.`,
+        details: rewardLines,
+        ctaLabel: "Seguir jugando"
+      });
+    }
     setIsFetchingProduct(false);
   };
 
