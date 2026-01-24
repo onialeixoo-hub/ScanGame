@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "motion/react";
+import { Toaster, toast } from "sonner";
 import { BottomNav } from "./components/BottomNav";
 import { Collection } from "./components/Collection";
 import { Home } from "./components/Home";
@@ -258,6 +259,15 @@ export default function App() {
     const bonusStreak = isFirstScanToday ? streakBonusByDays(nextScanStreak) : 0;
     const xpReward = duplicateToday ? 0 : baseReward + bonusDaily + bonusStreak;
 
+    if (duplicateToday) {
+      setScanPopup({
+        title: "Ya escaneaste este producto hoy",
+        message: "Volvé mañana para ganar puntos extra.",
+        details: ["Escaneo repetido en el día: 0 XP"],
+        ctaLabel: "Entendido"
+      });
+    }
+
     setScannedProduct({
       barcode,
       name,
@@ -366,6 +376,36 @@ export default function App() {
         }
       };
     });
+
+    const baseReward = Math.max(
+      scannedProduct.xpReward - scannedProduct.bonusDaily - scannedProduct.bonusStreak,
+      0
+    );
+    const rewardLines = [
+      baseReward > 0 ? `Base: +${baseReward} XP` : null,
+      scannedProduct.bonusDaily > 0
+        ? `Bonus primer producto del día: +${scannedProduct.bonusDaily} XP`
+        : null,
+      scannedProduct.bonusStreak > 0
+        ? `Bonus racha: +${scannedProduct.bonusStreak} XP`
+        : null
+    ].filter(Boolean) as string[];
+
+    if (scannedProduct.xpReward === 0) {
+      setScanPopup({
+        title: "Ya escaneaste este producto hoy",
+        message: "Volvé mañana para ganar puntos extra.",
+        details: ["Escaneo repetido en el día: 0 XP"],
+        ctaLabel: "Entendido"
+      });
+    } else {
+      setScanPopup({
+        title: "¡Felicitaciones!",
+        message: `Ganaste ${scannedProduct.xpReward} XP por el escaneo.`,
+        details: rewardLines,
+        ctaLabel: "Seguir jugando"
+      });
+    }
 
     setScannedProduct(null);
     setActiveTab("collection");
@@ -574,6 +614,10 @@ export default function App() {
             tasks={tasks}
             claims={claims}
             progress={activeProgress}
+            productsCount={userCollection.length}
+            categoriesCount={
+              new Set(userCollection.map((product) => product.appCategory)).size
+            }
             dailyGoal={DAILY_GOAL}
             bonusPoints={BONUS_POINTS}
             onCreateClaim={handleCreateClaim}
@@ -681,6 +725,10 @@ export default function App() {
               tasks={tasks}
               claims={claims}
               progress={activeProgress}
+              productsCount={userCollection.length}
+              categoriesCount={
+                new Set(userCollection.map((product) => product.appCategory)).size
+              }
               dailyGoal={DAILY_GOAL}
               bonusPoints={BONUS_POINTS}
               onCreateClaim={handleCreateClaim}
