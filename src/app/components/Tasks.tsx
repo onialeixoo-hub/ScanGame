@@ -32,7 +32,6 @@ interface TasksProps {
   progress: UserProgress;
   dailyGoal: number;
   bonusPoints: number;
-  onLogout: () => void;
   onCreateClaim: (taskId: string, note: string) => void;
   onApproveClaim: (claimId: string) => void;
   onRejectClaim: (claimId: string, note: string) => void;
@@ -68,7 +67,6 @@ export function Tasks({
   progress,
   dailyGoal,
   bonusPoints,
-  onLogout,
   onCreateClaim,
   onApproveClaim,
   onRejectClaim,
@@ -221,38 +219,29 @@ export function Tasks({
 
   const modeLabel = isAdmin ? "Modo Adulto" : "Modo Aventura";
 
+
   return (
     <div className="min-h-screen bg-[#E2DADB] pb-24">
-      <div className="sticky top-0 z-10 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] px-6 py-6 shadow-lg">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <ListTodo className="w-6 h-6" />
-              Tareas
-            </h1>
-            <p className="text-white/80 text-sm">{modeLabel}</p>
-          </div>
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] px-6 py-5 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
-            {!isAdmin && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="bg-white/20 text-white hover:bg-white/30"
-                onClick={() => setShowHistory(true)}
-              >
-                <History className="w-4 h-4 mr-2" />
-                Historial
-              </Button>
-            )}
+            <ListTodo className="w-6 h-6 text-white" />
+            <div>
+              <h1 className="text-2xl font-bold text-white">Tareas</h1>
+              <p className="text-white/80 text-sm">{modeLabel}</p>
+            </div>
+          </div>
+          {!isAdmin && (
             <Button
               variant="secondary"
               size="sm"
               className="bg-white/20 text-white hover:bg-white/30"
-              onClick={onLogout}
+              onClick={() => setShowHistory(true)}
             >
-              Cerrar sesión
+              <History className="w-4 h-4 mr-2" />
+              Historial
             </Button>
-          </div>
+          )}
         </div>
 
         {!isAdmin && (
@@ -297,7 +286,7 @@ export function Tasks({
         {!isAdmin && (
           <div>
             <h2 className="text-lg font-bold text-[#12130F] mb-3">Para hoy</h2>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {activeTasks.map((task, index) => {
                 const latestClaim = getLatestClaimForTask(task);
                 const status = latestClaim?.status ?? "idle";
@@ -310,15 +299,15 @@ export function Tasks({
                     transition={{ delay: index * 0.05 }}
                   >
                     <Card className="p-4 bg-white/95 border-2 border-[#386FA4]/20">
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-2">
                           <h3 className="font-bold text-[#12130F]">{task.title}</h3>
                           {task.description && (
                             <p className="text-sm text-[#386FA4]/80">
                               {task.description}
                             </p>
                           )}
-                          <div className="flex items-center gap-2 mt-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <Badge className="bg-blue-100 text-blue-700 border-0">
                               +{task.points} pts
                             </Badge>
@@ -330,32 +319,28 @@ export function Tasks({
                             </Badge>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
+                        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
                           {status === "idle" && (
                             <Button
-                              className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                              className="w-full bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white sm:w-auto"
                               onClick={() => openTaskModal(task)}
                             >
                               Marcar como hecha
                             </Button>
                           )}
                           {status === "pending" && (
-                            <Button variant="secondary" disabled>
+                            <Button variant="secondary" disabled className="w-full sm:w-auto">
                               Pendiente de aprobación
                             </Button>
                           )}
                           {status === "approved" && (
-                            <Button variant="secondary" disabled>
+                            <Button variant="secondary" disabled className="w-full sm:w-auto">
                               Aprobada ✅
                             </Button>
                           )}
                           {status === "rejected" && (
-                            <Button
-                              variant="outline"
-                              className="border-red-300 text-red-600"
-                              onClick={() => openTaskModal(task)}
-                            >
-                              Reenviar
+                            <Button variant="secondary" disabled className="w-full sm:w-auto">
+                              Rechazada ❌
                             </Button>
                           )}
                           {status === "rejected" && latestClaim?.rejectionNote && (
@@ -860,6 +845,7 @@ export function Tasks({
           </motion.div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }

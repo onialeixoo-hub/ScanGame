@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="64" fill="#e2e8f0"/>
+  <circle cx="128" cy="96" r="60" fill="#f5cba7"/>
+  <rect x="78" y="150" width="100" height="60" rx="22" fill="#93c5fd"/>
+  <circle cx="128" cy="180" r="20" fill="#ef4444"/>
+  <path d="M108 180h40" stroke="#fff" stroke-width="6"/>
+  <text x="128" y="205" fill="#1e3a8a" font-size="24" font-family="Arial" text-anchor="middle">Pepsi</text>
+</svg>
