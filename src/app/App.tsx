@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "motion/react";
+import { Toaster, toast } from "sonner";
 import { BottomNav } from "./components/BottomNav";
 import { Collection } from "./components/Collection";
 import { Home } from "./components/Home";
@@ -308,6 +309,35 @@ export default function App() {
       };
     });
 
+    const baseReward = Math.max(
+      scannedProduct.xpReward - scannedProduct.bonusDaily - scannedProduct.bonusStreak,
+      0
+    );
+    const rewardLines = [
+      baseReward > 0 ? `Base: +${baseReward} XP` : null,
+      scannedProduct.bonusDaily > 0
+        ? `Bonus primer producto del día: +${scannedProduct.bonusDaily} XP`
+        : null,
+      scannedProduct.bonusStreak > 0
+        ? `Bonus racha: +${scannedProduct.bonusStreak} XP`
+        : null,
+      scannedProduct.xpReward === 0
+        ? "Sin recompensa por escaneo repetido hoy."
+        : null
+    ].filter(Boolean) as string[];
+
+    toast("Recompensas del escaneo", {
+      description: (
+        <div className="space-y-1">
+          {rewardLines.map((line) => (
+            <p key={line} className="text-sm text-slate-700">
+              {line}
+            </p>
+          ))}
+        </div>
+      )
+    });
+
     setScannedProduct(null);
     setActiveTab("collection");
   };
@@ -515,6 +545,7 @@ export default function App() {
 
   return (
     <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
+      <Toaster position="top-center" richColors closeButton />
       <div className="pb-20 max-w-md mx-auto bg-[#E2DADB] min-h-screen relative shadow-2xl overflow-hidden">
         <AnimatePresence mode="wait">
           {showScanner ? (

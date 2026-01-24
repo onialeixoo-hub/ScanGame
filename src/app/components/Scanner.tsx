@@ -3,6 +3,16 @@ import { motion } from "motion/react";
 import { Camera, Flashlight, FlashlightOff, Lock, X, Zap } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 
+type DetectedBarcode = {
+  rawValue: string;
+};
+
+type BarcodeDetectorInstance = {
+  detect: (source: ImageBitmapSource) => Promise<DetectedBarcode[]>;
+};
+
+type BarcodeDetectorConstructor = new (options?: { formats?: string[] }) => BarcodeDetectorInstance;
+
 interface ScannerProps {
   onScanComplete: (barcode: string) => void;
   onClose: () => void;
@@ -16,10 +26,15 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
   >("checking");
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [scanLocked, setScanLocked] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
+  const scanLoopRef = useRef<number | null>(null);
 
   const requestCamera = async () => {
     setPermissionStatus("checking");
+    setScanError(null);
     if (!navigator.mediaDevices?.getUserMedia) {
       setPermissionStatus("denied");
       return;
@@ -29,36 +44,86 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
         video: { facingMode: { ideal: "environment" } }
       });
       streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
       setPermissionStatus("granted");
     } catch (error) {
       setPermissionStatus("denied");
     }
   };
 
-  // Simulación de escaneo automático
   useEffect(() => {
-    if (isScanning && !scanLocked) {
-      const interval = setInterval(() => {
-        setScanProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            // Generar código de barras simulado
-            const mockBarcode = `${Math.floor(Math.random() * 900000000000) + 100000000000}`;
-            setScanLocked(true);
-            setTimeout(() => onScanComplete(mockBarcode), 300);
-            return 100;
-          }
-          return prev + 5;
-        });
-      }, 50);
-
-      return () => clearInterval(interval);
+    if (permissionStatus !== "granted") return;
+    const DetectorConstructor = (window as Window & {
+      BarcodeDetector?: BarcodeDetectorConstructor;
+    }).BarcodeDetector;
+    if (!DetectorConstructor) {
+      setScanError("Tu navegador no soporta escaneo de códigos de barras.");
+      return;
     }
-  }, [isScanning, onScanComplete]);
+    try {
+      detectorRef.current = new DetectorConstructor({
+        formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"]
+      });
+    } catch (error) {
+      setScanError("No se pudo inicializar el detector de códigos.");
+    }
+  }, [permissionStatus]);
+
+  useEffect(() => {
+    if (!isScanning || scanLocked) return;
+    const interval = window.setInterval(() => {
+      setScanProgress((prev) => (prev >= 95 ? 15 : prev + 5));
+    }, 160);
+
+    return () => window.clearInterval(interval);
+  }, [isScanning, scanLocked]);
+
+  useEffect(() => {
+    if (!isScanning || scanLocked || permissionStatus !== "granted") return;
+    if (!detectorRef.current || !videoRef.current) return;
+
+    let active = true;
+
+    const scanFrame = async () => {
+      if (!active || !detectorRef.current || !videoRef.current) return;
+      try {
+        const codes = await detectorRef.current.detect(videoRef.current);
+        if (codes.length > 0) {
+          const value = codes[0].rawValue;
+          setScanLocked(true);
+          setScanProgress(100);
+          setIsScanning(false);
+          onScanComplete(value);
+          return;
+        }
+      } catch (error) {
+        setScanError("No se pudo leer el código. Probá acercar la cámara.");
+        setIsScanning(false);
+        return;
+      }
+
+      scanLoopRef.current = requestAnimationFrame(scanFrame);
+    };
+
+    scanLoopRef.current = requestAnimationFrame(scanFrame);
+
+    return () => {
+      active = false;
+      if (scanLoopRef.current) {
+        cancelAnimationFrame(scanLoopRef.current);
+      }
+    };
+  }, [isScanning, scanLocked, permissionStatus, onScanComplete]);
 
   useEffect(() => {
     requestCamera();
     return () => {
+      if (scanLoopRef.current) {
+        cancelAnimationFrame(scanLoopRef.current);
+      }
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
@@ -89,8 +154,10 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
   };
 
   const handleStartScan = () => {
+    if (scanError) return;
     setIsScanning(true);
     setScanProgress(0);
+    setScanLocked(false);
   };
 
   return (
@@ -123,11 +190,16 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
         </div>
       </div>
 
-      {/* Camera View Simulation */}
+      {/* Camera View */}
       <div className="relative w-full h-full flex items-center justify-center">
-        {/* Background pattern to simulate camera */}
-        <div className="absolute inset-0 opacity-20">
-          <div className="w-full h-full bg-gradient-to-br from-slate-600 to-slate-700" />
+        <div className="absolute inset-0">
+          <video
+            ref={videoRef}
+            className="h-full w-full object-cover"
+            playsInline
+            muted
+          />
+          <div className="absolute inset-0 bg-black/30" />
         </div>
 
         {/* Scanning Overlay */}
@@ -145,6 +217,11 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
                   Volver a intentar
                 </Button>
               )}
+            </div>
+          )}
+          {scanError && (
+            <div className="mb-4 rounded-xl bg-amber-500/20 border border-amber-400/40 p-4 text-amber-100 text-sm">
+              {scanError}
             </div>
           )}
           {/* Scan Frame */}
@@ -219,7 +296,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
                 <Button
                   onClick={handleStartScan}
                   className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold h-12"
-                  disabled={permissionStatus !== "granted"}
+                  disabled={permissionStatus !== "granted" || Boolean(scanError)}
                 >
                   <Zap className="w-5 h-5 mr-2" />
                   Iniciar Escaneo
@@ -228,6 +305,11 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
                   <p className="text-xs text-white/70 flex items-center justify-center gap-2">
                     <Lock className="w-4 h-4" />
                     Permiso requerido para escanear
+                  </p>
+                )}
+                {scanError && (
+                  <p className="text-xs text-amber-200">
+                    Usá un navegador compatible como Chrome o Edge en un dispositivo con cámara.
                   </p>
                 )}
               </>
