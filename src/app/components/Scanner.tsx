@@ -27,10 +27,20 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [scanLocked, setScanLocked] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [manualBarcode, setManualBarcode] = useState("");
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
   const scanLoopRef = useRef<number | null>(null);
+
+  const stopCamera = () => {
+    if (scanLoopRef.current) {
+      cancelAnimationFrame(scanLoopRef.current);
+      scanLoopRef.current = null;
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  };
 
   const requestCamera = async () => {
     setPermissionStatus("checking");
@@ -60,7 +70,9 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
       BarcodeDetector?: BarcodeDetectorConstructor;
     }).BarcodeDetector;
     if (!DetectorConstructor) {
-      setScanError("Tu navegador no soporta escaneo de códigos de barras.");
+      setScanError(
+        "Tu navegador no soporta escaneo automático. Podés ingresar el código manualmente."
+      );
       return;
     }
     try {
@@ -96,6 +108,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
           setScanLocked(true);
           setScanProgress(100);
           setIsScanning(false);
+          stopCamera();
           onScanComplete(value);
           return;
         }
@@ -121,10 +134,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
   useEffect(() => {
     requestCamera();
     return () => {
-      if (scanLoopRef.current) {
-        cancelAnimationFrame(scanLoopRef.current);
-      }
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      stopCamera();
     };
   }, []);
 
@@ -154,10 +164,22 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
   };
 
   const handleStartScan = () => {
-    if (scanError) return;
+    if (scanError || !detectorRef.current) return;
     setIsScanning(true);
     setScanProgress(0);
     setScanLocked(false);
+  };
+
+  const handleClose = () => {
+    stopCamera();
+    onClose();
+  };
+
+  const handleManualSubmit = () => {
+    if (!manualBarcode.trim()) return;
+    setScanLocked(true);
+    stopCamera();
+    onScanComplete(manualBarcode.trim());
   };
 
   return (
@@ -180,7 +202,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
             )}
           </Button>
           <Button
-            onClick={onClose}
+            onClick={handleClose}
             variant="ghost"
             size="icon"
             className="text-white hover:bg-white/20"
@@ -296,7 +318,9 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
                 <Button
                   onClick={handleStartScan}
                   className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold h-12"
-                  disabled={permissionStatus !== "granted" || Boolean(scanError)}
+                  disabled={
+                    permissionStatus !== "granted" || Boolean(scanError) || !detectorRef.current
+                  }
                 >
                   <Zap className="w-5 h-5 mr-2" />
                   Iniciar Escaneo
@@ -309,7 +333,7 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
                 )}
                 {scanError && (
                   <p className="text-xs text-amber-200">
-                    Usá un navegador compatible como Chrome o Edge en un dispositivo con cámara.
+                    Si tu navegador no soporta el escaneo, podés ingresar el código manualmente.
                   </p>
                 )}
               </>
@@ -337,6 +361,25 @@ export function Scanner({ onScanComplete, onClose }: ScannerProps) {
               </motion.div>
             )}
           </motion.div>
+
+          {scanError && (
+            <div className="mt-6 space-y-3 rounded-2xl border border-white/10 bg-white/10 p-4 text-white">
+              <p className="text-sm font-semibold">Ingreso manual</p>
+              <input
+                value={manualBarcode}
+                onChange={(event) => setManualBarcode(event.target.value)}
+                inputMode="numeric"
+                placeholder="Ingresá el código de barras"
+                className="w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <Button
+                onClick={handleManualSubmit}
+                className="w-full bg-white/20 hover:bg-white/30 text-white font-semibold"
+              >
+                Confirmar código
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
