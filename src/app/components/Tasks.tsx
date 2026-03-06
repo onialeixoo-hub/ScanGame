@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { List } from "lucide-react"
 import {
   CheckCircle2,
   Clock,
@@ -15,6 +16,7 @@ import {
   Trash2,
   UserRound,
   UserRoundCog,
+  List,
   XCircle
 } from "lucide-react";
 import avatarHoodie from "@/assets/avatars/avatar-hoodie.svg";
@@ -241,7 +243,7 @@ export function Tasks({
       <div className="sticky top-0 z-10 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] px-6 py-5 shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
-            <ListTodo className="w-6 h-6 text-white" />
+            <List className="w-6 h-6 text-white" />
             <div>
               <h1 className="text-2xl font-bold text-white">Tareas</h1>
               <p className="text-white/80 text-sm">{modeLabel}</p>

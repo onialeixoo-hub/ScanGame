@@ -1,0 +1,40 @@
+[33mb45d0d4[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Create contexts
+[33m8d8d707[m Merge pull request #12 from onialeixoo-hub/codex/fix-camera-functionality-and-add-popup-i86w5w
+[33m52c730c[m[33m ([m[1;31morigin/codex/fix-camera-functionality-and-add-popup-i86w5w[m[33m)[m Merge branch 'main' into codex/fix-camera-functionality-and-add-popup-i86w5w
+[33mb8e502a[m Fix home CTA layout and persist session
+[33mbb62ca0[m Merge pull request #11 from onialeixoo-hub/codex/fix-camera-functionality-and-add-popup-ab7fyi
+[33m36ac4c2[m[33m ([m[1;31morigin/codex/fix-camera-functionality-and-add-popup-ab7fyi[m[33m)[m Merge branch 'main' into codex/fix-camera-functionality-and-add-popup-ab7fyi
+[33m90b013b[m Move profile menu to home and lock rejected tasks
+[33m1607bc3[m Merge pull request #10 from onialeixoo-hub/codex/fix-camera-functionality-and-add-popup-aqqaqb
+[33m02b0da6[m[33m ([m[1;31morigin/codex/fix-camera-functionality-and-add-popup-aqqaqb[m[33m)[m Add logo and avatar selection
+[33m7619084[m Merge pull request #9 from onialeixoo-hub/codex/fix-camera-functionality-and-add-popup-sptkru
+[33mdc6f71f[m[33m ([m[1;31morigin/codex/fix-camera-functionality-and-add-popup-sptkru[m[33m)[m Merge branch 'main' into codex/fix-camera-functionality-and-add-popup-sptkru
+[33m92d9fd3[m Improve iOS scanner layout and timeouts
+[33m80bb1c8[m Merge pull request #8 from onialeixoo-hub/codex/fix-camera-functionality-and-add-popup-mj9mxm
+[33mff84b15[m[33m ([m[1;31morigin/codex/fix-camera-functionality-and-add-popup-mj9mxm[m[33m)[m Merge branch 'main' into codex/fix-camera-functionality-and-add-popup-mj9mxm
+[33m89a8d1c[m Fix scanner UX overlap and popup issues
+[33m1bb82a3[m Merge pull request #7 from onialeixoo-hub/codex/fix-camera-functionality-and-add-popup-vrmbrn
+[33m02811f6[m[33m ([m[1;31morigin/codex/fix-camera-functionality-and-add-popup-vrmbrn[m[33m)[m Merge branch 'main' into codex/fix-camera-functionality-and-add-popup-vrmbrn
+[33m842c0fe[m Improve scanner fallback and reward popup
+[33me3f4bea[m Merge pull request #6 from onialeixoo-hub/codex/fix-camera-functionality-and-add-popup
+[33mb7a2a06[m[33m ([m[1;31morigin/codex/fix-camera-functionality-and-add-popup[m[33m)[m Enable real barcode scanning and reward popups
+[33md4958a0[m Merge pull request #5 from onialeixoo-hub/codex/implement-login-and-task-management-screens-88bj32
+[33mfd749c2[m[33m ([m[1;31morigin/codex/implement-login-and-task-management-screens-88bj32[m[33m)[m Merge branch 'main' into codex/implement-login-and-task-management-screens-88bj32
+[33m3980cf3[m Adjust scan result layout
+[33mf30fb4b[m Merge pull request #4 from onialeixoo-hub/codex/implement-login-and-task-management-screens-05ppng
+[33mc92a484[m[33m ([m[1;31morigin/codex/implement-login-and-task-management-screens-05ppng[m[33m)[m Merge branch 'main' into codex/implement-login-and-task-management-screens-05ppng
+[33m3b49b31[m Restore user scan and collection flow
+[33m1f78d5f[m Merge pull request #2 from onialeixoo-hub/codex/implement-login-and-task-management-screens-obut68
+[33m2e4d487[m[33m ([m[1;31morigin/codex/implement-login-and-task-management-screens-obut68[m[33m)[m Merge branch 'main' into codex/implement-login-and-task-management-screens-obut68
+[33mbd5a917[m Update seeded login users
+[33m40429e2[m Merge pull request #1 from onialeixoo-hub/codex/implement-login-and-task-management-screens
+[33mef7e566[m[33m ([m[1;31morigin/codex/implement-login-and-task-management-screens[m[33m)[m Add login and task approval flow
+[33mb928d77[m Restaurar App.tsx original
+[33mce75f6b[m Agregar sistema de login y persistencia
+[33mdbe4d2c[m Agregar base path ScanGame
+[33mdffa339[m Agregar archivo fonts.css faltante
+[33m0424085[m Corregir nombre main.tsx
+[33macaa97c[m Merge branch 'main' of https://github.com/onialeixoo-hub/ScanGame
+[33m9ef60d3[m Corregir nombre index.html
+[33mc995838[m Create main.yml
+[33m78cf0c3[m Mi primera web app
