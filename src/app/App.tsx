@@ -101,12 +101,41 @@ const initialProgress: UserProgress = {
 const COLLECTION_STORAGE_KEY = "scanGame.collection";
 const PROGRESS_STORAGE_KEY = "scanGame.progress";
 const CURRENT_USER_KEY = "scanGame.currentUserId";
+const TASKS_STORAGE_KEY = "scanGame.tasks";
+const CLAIMS_STORAGE_KEY = "scanGame.claims";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>(initialUsers);
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [claims, setClaims] = useState<TaskClaim[]>([]);
+ const [tasks, setTasks] = useState<Task[]>(() => {
+  if (typeof window === "undefined") return initialTasks;
+
+  try {
+    const stored = localStorage.getItem(TASKS_STORAGE_KEY);
+
+    if (!stored) return initialTasks;
+
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? (parsed as Task[]) : initialTasks;
+  } catch {
+    return initialTasks;
+  }
+});
+
+const [claims, setClaims] = useState<TaskClaim[]>(() => {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const stored = localStorage.getItem(CLAIMS_STORAGE_KEY);
+
+    if (!stored) return [];
+
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? (parsed as TaskClaim[]) : [];
+  } catch {
+    return [];
+  }
+});
   const [progressByUser, setProgressByUser] = useState<Record<string, UserProgress>>(
     () => {
       if (typeof window === "undefined") {
@@ -170,6 +199,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progressByUser));
   }, [progressByUser]);
+
+  useEffect(() => {
+  localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+}, [tasks]);
+
+useEffect(() => {
+  localStorage.setItem(CLAIMS_STORAGE_KEY, JSON.stringify(claims));
+}, [claims]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
