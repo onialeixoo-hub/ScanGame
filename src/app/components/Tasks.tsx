@@ -31,6 +31,7 @@ import { Card } from "@/app/components/ui/card";
 import { Progress } from "@/app/components/ui/progress";
 import { Switch } from "@/app/components/ui/switch";
 import { Textarea } from "@/app/components/ui/textarea";
+import { Input } from "@/app/components/ui/input";
 import type { Task, TaskClaim, TaskFrequency, User, UserProgress } from "@/app/types";
 
 interface TasksProps {
