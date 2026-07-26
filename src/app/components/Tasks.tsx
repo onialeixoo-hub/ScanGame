@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { List } from "lucide-react"
 import {
   CheckCircle2,
   Clock,
