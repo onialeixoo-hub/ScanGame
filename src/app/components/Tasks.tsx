@@ -170,11 +170,10 @@ export function Tasks({
     setClaimNote("");
   };
 
-  const handleAdminConfirm = () => {
-    if (adminPin !== currentUser.pin) {
-      setAdminError("PIN incorrecto");
-      return;
-    }
+if (adminPin !== currentUser.pin) {
+  setAdminError("Contraseña incorrecta");
+  return;
+}
 
     if (adminAction?.type === "approve" && adminAction.claim) {
       onApproveClaim(adminAction.claim.id);
@@ -659,19 +658,17 @@ export function Tasks({
                   Confirmar acción
                 </h3>
               </div>
-              <p className="text-sm text-[#386FA4] mb-3">
-                Ingresá tu PIN para continuar.
-              </p>
-              <Input
-                type="password"
-                inputMode="numeric"
-                maxLength={4}
-                value={adminPin}
-                onChange={(event) =>
-                  setAdminPin(event.target.value.replace(/\D/g, ""))
-                }
-                className="mb-3"
-              />
+           <p className="text-sm text-[#386FA4] mb-3">
+  Ingresá tu contraseña para continuar.
+</p>
+<Input
+  type="password"
+  value={adminPin}
+  onChange={(event) => setAdminPin(event.target.value)}
+  autoComplete="current-password"
+  placeholder="Contraseña"
+  className="mb-3"
+/>
               {adminAction.type === "reject" && (
                 <Textarea
                   value={rejectionNote}
