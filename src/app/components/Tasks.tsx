@@ -170,10 +170,29 @@ export function Tasks({
     setClaimNote("");
   };
 
-if (adminPin !== currentUser.pin) {
-  setAdminError("Contraseña incorrecta");
-  return;
-}
+const handleAdminConfirm = () => {
+  if (adminPin !== currentUser.pin) {
+    setAdminError("Contraseña incorrecta");
+    return;
+  }
+
+  if (adminAction?.type === "approve" && adminAction.claim) {
+    onApproveClaim(adminAction.claim.id);
+  }
+
+  if (adminAction?.type === "reject" && adminAction.claim) {
+    onRejectClaim(adminAction.claim.id, rejectionNote);
+  }
+
+  if (adminAction?.type === "reset") {
+    onResetProgress();
+  }
+
+  setAdminAction(null);
+  setAdminPin("");
+  setAdminError("");
+  setRejectionNote("");
+};
 
     if (adminAction?.type === "approve" && adminAction.claim) {
       onApproveClaim(adminAction.claim.id);
