@@ -275,11 +275,26 @@ export default function App() {
             (user) => user.id === previousUser.id
           );
 
-          return updatedCurrentUser ?? previousUser;
+          if (!updatedCurrentUser) return previousUser;
+
+          const hasChanged =
+            updatedCurrentUser.name !== previousUser.name ||
+            updatedCurrentUser.username !== previousUser.username ||
+            updatedCurrentUser.role !== previousUser.role ||
+            updatedCurrentUser.avatar !== previousUser.avatar;
+
+          return hasChanged
+            ? updatedCurrentUser
+            : previousUser;
         });
       },
-      () => {
-        toast.error("No se pudieron cargar los usuarios");
+      (error) => {
+        console.error("Error al cargar usuarios:", error);
+        toast.error(
+          error.code === "resource-exhausted"
+            ? "Firebase agotó la cuota diaria"
+            : "No se pudieron cargar los usuarios"
+        );
       }
     );
 
@@ -322,8 +337,13 @@ export default function App() {
           });
         }
       },
-      () => {
-        toast.error("No se pudieron cargar las tareas");
+      (error) => {
+        console.error("Error al cargar tareas:", error);
+        toast.error(
+          error.code === "resource-exhausted"
+            ? "Firebase agotó la cuota diaria"
+            : "No se pudieron cargar las tareas"
+        );
       }
     );
 
@@ -345,8 +365,13 @@ export default function App() {
 
         setClaims(remoteClaims);
       },
-      () => {
-        toast.error("No se pudieron cargar las solicitudes");
+      (error) => {
+        console.error("Error al cargar solicitudes:", error);
+        toast.error(
+          error.code === "resource-exhausted"
+            ? "Firebase agotó la cuota diaria"
+            : "No se pudieron cargar las solicitudes"
+        );
       }
     );
 
@@ -355,7 +380,7 @@ export default function App() {
       unsubscribeTasks();
       unsubscribeClaims();
     };
-  }, [currentUser]);
+  }, [currentUser?.id, currentUser?.role]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -415,8 +440,13 @@ export default function App() {
               });
             });
         },
-        () => {
-          toast.error("No se pudo cargar el progreso");
+        (error) => {
+          console.error("Error al cargar progreso:", error);
+          toast.error(
+            error.code === "resource-exhausted"
+              ? "Firebase agotó la cuota diaria"
+              : "No se pudo cargar el progreso"
+          );
         }
       );
     }
@@ -448,11 +478,16 @@ export default function App() {
           toast.error("No se pudo crear el progreso en Firebase");
         });
       },
-      () => {
-        toast.error("No se pudo cargar el progreso");
+      (error) => {
+        console.error("Error al cargar progreso:", error);
+        toast.error(
+          error.code === "resource-exhausted"
+            ? "Firebase agotó la cuota diaria"
+            : "No se pudo cargar el progreso"
+        );
       }
     );
-  }, [currentUser, users]);
+  }, [currentUser?.id, currentUser?.role, users]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -564,11 +599,16 @@ export default function App() {
             toast.error("No se pudo migrar la colección a Firebase");
           });
       },
-      () => {
-        toast.error("No se pudo cargar la colección");
+      (error) => {
+        console.error("Error al cargar colección:", error);
+        toast.error(
+          error.code === "resource-exhausted"
+            ? "Firebase agotó la cuota diaria"
+            : "No se pudo cargar la colección"
+        );
       }
     );
-  }, [currentUser, users]);
+  }, [currentUser?.id, currentUser?.role, users]);
 
   const isSameDay = (dateValue: string | undefined) => {
     if (!dateValue) return false;
