@@ -1,10 +1,26 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Scan, Star, Flame, Trophy, ListTodo, Package, Grid3x3, Sparkles, Check, ArrowRight, Menu, Settings, UserRoundCog, XCircle } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  Check,
+  Flame,
+  Grid3x3,
+  ListTodo,
+  Menu,
+  Package,
+  ScanLine,
+  Settings,
+  Sparkles,
+  Star,
+  UserRoundCog,
+  XCircle
+} from "lucide-react";
+
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
-import { Progress } from "@/app/components/ui/progress";
 import { Input } from "@/app/components/ui/input";
+import { Progress } from "@/app/components/ui/progress";
 import avatarHoodie from "@/assets/avatars/avatar-hoodie.svg";
 import avatarHeadset from "@/assets/avatars/avatar-headset.svg";
 import avatarCap from "@/assets/avatars/avatar-cap.svg";
@@ -79,285 +95,350 @@ export function Home({
     { id: "glasses", src: avatarGlasses, label: "Lentes" }
   ];
 
-  const xpPercentage = (currentXP / xpToNextLevel) * 100;
-  const todayTasks = tasks.filter(t => !t.completed).slice(0, 3); // Primeras 3 tareas del día
+  let levelStartXp = 0;
+  let levelRequirement = 1000;
+
+  for (let level = 1; level < userLevel; level += 1) {
+    levelStartXp += levelRequirement;
+    levelRequirement += 200;
+  }
+
+  const xpInCurrentLevel = Math.max(currentXP - levelStartXp, 0);
+  const xpRequiredForCurrentLevel = Math.max(
+    xpToNextLevel - levelStartXp,
+    1
+  );
+  const xpPercentage = Math.min(
+    (xpInCurrentLevel / xpRequiredForCurrentLevel) * 100,
+    100
+  );
+
+  const todayTasks = tasks.filter((task) => !task.completed).slice(0, 4);
 
   return (
-    <div className="min-h-screen bg-[#E2DADB] p-6 pb-24">
-      {/* CTA Principal - Botón Escanear */}
+    <div className="min-h-screen bg-[#E2DADB] px-5 pb-24 pt-5">
+      {/* Encabezado */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: -20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: "spring", duration: 0.6 }}
-        className="mb-6"
-      >
-        <div className="relative">
-          <Button
-            onClick={onScanClick}
-            className="w-full h-24 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] hover:from-[#2d5a85] hover:to-[#386FA4] text-white font-bold text-2xl rounded-3xl shadow-2xl relative overflow-hidden group pl-16"
-          >
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
-              animate={{ x: ["-100%", "100%"] }}
-              transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
-            />
-            <Scan className="w-10 h-10 mr-3" />
-            <span>Escanear Producto</span>
-          </Button>
-          <Button
-            onClick={() => setShowProfileMenu(true)}
-            size="icon"
-            className="absolute left-4 top-1/2 h-12 w-12 -translate-y-1/2 rounded-2xl bg-white/90 text-[#386FA4] hover:bg-white"
-          >
-            <Menu className="w-6 h-6" />
-          </Button>
-        </div>
-      </motion.div>
-
-      {/* Header Compacto - Avatar, Nombre, Nivel, Puntos */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
+        initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="mb-4"
+        className="mb-4 flex items-center gap-3"
       >
-        <Card className="p-4 bg-white border-2 border-[#386FA4]/20 shadow-md">
-          <div className="flex items-center gap-3">
-            {/* Avatar */}
-            <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", duration: 0.8, delay: 0.2 }}
-              className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg border-4 border-white overflow-hidden"
-            >
-              <img src={avatar} alt={`Avatar de ${username}`} className="w-full h-full object-cover" />
-            </motion.div>
-            
-            {/* Info */}
-            <div className="flex-1">
-              <h2 className="text-lg font-bold text-[#12130F]">¡Hola, {username}!</h2>
-              <p className="text-sm text-[#386FA4] font-semibold">Nivel {userLevel}</p>
-            </div>
-            
-            {/* Puntos Badge */}
-            <div className="bg-gradient-to-br from-amber-100 to-orange-100 rounded-xl px-3 py-2 border-2 border-amber-200 shadow-sm">
-              <div className="flex items-center gap-1">
-                <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
-                <span className="text-lg font-bold text-amber-900">{totalPoints}</span>
-              </div>
-              <p className="text-xs text-amber-700 text-center">puntos</p>
-            </div>
-          </div>
-        </Card>
+        <div className="h-14 w-14 overflow-hidden rounded-full border-4 border-white bg-white shadow-md">
+          <img
+            src={avatar}
+            alt={`Avatar de ${username}`}
+            className="h-full w-full object-cover"
+          />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-[#386FA4]">
+            Bienvenido de nuevo
+          </p>
+          <h1 className="truncate text-2xl font-bold text-[#12130F]">
+            {username}
+          </h1>
+        </div>
+
+        <Button
+          type="button"
+          size="icon"
+          onClick={() => setShowProfileMenu(true)}
+          className="h-12 w-12 rounded-2xl bg-[#386FA4] text-white shadow-lg hover:bg-[#2d5a85]"
+          aria-label="Abrir menú"
+        >
+          <Menu className="h-6 w-6" />
+        </Button>
       </motion.div>
 
-      {/* Banner Racha Diaria */}
+      {/* Nivel y XP */}
       <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="mb-4"
-      >
-        <Card className="p-4 bg-gradient-to-r from-orange-100 to-amber-100 border-2 border-orange-200 shadow-md">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center shadow-lg">
-                <Flame className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <p className="text-sm text-orange-700 font-semibold">Racha Diaria</p>
-                <p className="text-2xl font-bold text-orange-900">{dailyStreak} días</p>
-              </div>
-            </div>
-            <Trophy className="w-8 h-8 text-orange-500" />
-          </div>
-        </Card>
-      </motion.div>
-
-      {/* Level Card */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.05 }}
         className="mb-4"
       >
-        <Card className="p-5 bg-white border-2 border-[#386FA4]/20 shadow-lg">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#386FA4] to-[#2d5a85] flex items-center justify-center text-white font-bold text-lg shadow-md">
+        <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-xl">
+          <div className="mb-4 flex items-center gap-4">
+            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-white/20 text-2xl font-bold shadow-inner">
               {userLevel}
             </div>
-            <div className="flex-1">
-              <p className="text-xs text-[#386FA4]">Nivel Actual</p>
-              <p className="text-xl font-bold text-[#12130F]">Nivel {userLevel}</p>
+
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-white/75">
+                Nivel actual
+              </p>
+              <p className="text-2xl font-bold">Nivel {userLevel}</p>
+              <p className="text-xs text-white/75">
+                {xpRequiredForCurrentLevel - xpInCurrentLevel} XP para subir
+              </p>
             </div>
           </div>
-          
+
           <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-[#386FA4]">Progreso</span>
-              <span className="text-[#12130F] font-semibold">{currentXP} / {xpToNextLevel} XP</span>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-semibold">XP del nivel</span>
+              <span className="text-right font-bold">
+                {xpInCurrentLevel} / {xpRequiredForCurrentLevel} XP
+              </span>
             </div>
-            <Progress value={xpPercentage} className="h-2.5 bg-[#E2DADB]" />
+            <Progress
+              value={xpPercentage}
+              className="h-3 bg-white/20"
+            />
           </div>
         </Card>
       </motion.div>
 
-      {/* Mis Estadísticas - 3 Cards */}
+      {/* Puntos y racha */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="mb-6"
+        transition={{ delay: 0.1 }}
+        className="mb-5 grid grid-cols-2 gap-3"
       >
-        <h3 className="text-base font-bold text-[#12130F] mb-3">📊 Mis Estadísticas</h3>
-        <div className="grid grid-cols-3 gap-2">
-          <Card className="p-3 bg-gradient-to-br from-[#386FA4] to-[#2d5a85] border-0 shadow-md">
-            <div className="flex flex-col items-center text-center">
-              <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center mb-2">
-                <Package className="w-6 h-6 text-white" />
-              </div>
-              <p className="text-2xl font-bold text-white mb-0.5">{totalProducts}</p>
-              <p className="text-xs text-white/80 leading-tight">Productos</p>
-            </div>
-          </Card>
+        <Card className="border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 shadow-md">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/20">
+            <Star className="h-6 w-6 fill-amber-400 text-amber-500" />
+          </div>
+          <p className="text-2xl font-bold text-amber-950">{totalPoints}</p>
+          <p className="text-xs font-semibold text-amber-700">
+            Puntos disponibles
+          </p>
+        </Card>
 
-          <Card className="p-3 bg-gradient-to-br from-[#7CAE7A] to-[#5d9259] border-0 shadow-md">
-            <div className="flex flex-col items-center text-center">
-              <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center mb-2">
-                <Grid3x3 className="w-6 h-6 text-white" />
-              </div>
-              <p className="text-2xl font-bold text-white mb-0.5">{categoriesCount}</p>
-              <p className="text-xs text-white/80 leading-tight">Categorías</p>
-            </div>
-          </Card>
-
-          <Card className="p-3 bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] border-0 shadow-md">
-            <div className="flex flex-col items-center text-center">
-              <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center mb-2">
-                <Check className="w-6 h-6 text-white" />
-              </div>
-              <p className="text-2xl font-bold text-white mb-0.5">{completedTasksToday}</p>
-              <p className="text-xs text-white/80 leading-tight">Tareas hoy</p>
-            </div>
-          </Card>
-        </div>
+        <Card className="border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-400/20">
+            <Flame className="h-6 w-6 text-orange-500" />
+          </div>
+          <p className="text-2xl font-bold text-orange-950">
+            {dailyStreak} días
+          </p>
+          <p className="text-xs font-semibold text-orange-700">
+            Racha actual
+          </p>
+        </Card>
       </motion.div>
 
-      {/* Tareas del Día */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
+      {/* Tareas del día */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
+        transition={{ delay: 0.15 }}
+        className="mb-5"
       >
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-bold text-[#12130F]">✅ Tareas del Día</h3>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-[#12130F]">
+              Tareas del día
+            </h2>
+            <p className="text-sm text-[#386FA4]">
+              {activeTasks} pendiente{activeTasks === 1 ? "" : "s"}
+            </p>
+          </div>
+
           <Button
-            onClick={onTasksClick}
+            type="button"
             variant="ghost"
-            className="text-[#386FA4] hover:bg-[#386FA4]/10 text-sm font-semibold h-8 px-3"
+            onClick={onTasksClick}
+            className="text-[#386FA4] hover:bg-[#386FA4]/10"
           >
             Ver todas
-            <ArrowRight className="w-4 h-4 ml-1" />
+            <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
 
         {todayTasks.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {todayTasks.map((task, index) => (
               <motion.div
                 key={task.id}
-                initial={{ opacity: 0, x: -20 }}
+                initial={{ opacity: 0, x: -16 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5 + index * 0.1 }}
+                transition={{ delay: 0.18 + index * 0.05 }}
               >
-                <Card className="p-3 bg-white border-2 border-[#386FA4]/20 hover:shadow-md transition-shadow">
+                <Card className="border-2 border-[#386FA4]/15 bg-white p-4 shadow-sm">
                   <div className="flex items-center gap-3">
                     <button
+                      type="button"
                       onClick={() => onCompleteTask(task.id)}
-                      className="w-8 h-8 rounded-full border-2 border-[#386FA4] hover:bg-[#386FA4] transition-colors flex items-center justify-center group flex-shrink-0"
+                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#386FA4] transition hover:bg-[#386FA4]"
+                      aria-label={`Completar ${task.title}`}
                     >
-                      <Check className="w-5 h-5 text-[#386FA4] group-hover:text-white" />
+                      <Check className="h-5 w-5 text-[#386FA4]" />
                     </button>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[#12130F] text-sm truncate">{task.title}</p>
-                      <p className="text-xs text-[#386FA4]">+{task.xpReward} XP</p>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold text-[#12130F]">
+                        {task.title}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded-full bg-purple-100 px-2 py-1 font-semibold text-purple-700">
+                          +{task.xpReward} XP
+                        </span>
+                        <span className="rounded-full bg-amber-100 px-2 py-1 font-semibold text-amber-700">
+                          +{task.pointsReward} puntos
+                        </span>
+                      </div>
                     </div>
-                    <Sparkles className="w-5 h-5 text-amber-500 flex-shrink-0" />
+
+                    <Sparkles className="h-5 w-5 flex-shrink-0 text-amber-500" />
                   </div>
                 </Card>
               </motion.div>
             ))}
           </div>
         ) : (
-          <Card className="p-6 bg-white/50 border-2 border-dashed border-[#386FA4]/30">
-            <div className="text-center">
-              <ListTodo className="w-12 h-12 text-[#386FA4]/40 mx-auto mb-2" />
-              <p className="text-sm text-[#386FA4]/60 font-semibold">No hay tareas pendientes</p>
-              <Button
-                onClick={onTasksClick}
-                variant="ghost"
-                className="text-[#386FA4] hover:bg-[#386FA4]/10 text-sm mt-2"
-              >
-                Agregar tareas
-              </Button>
-            </div>
+          <Card className="border-2 border-dashed border-emerald-300 bg-emerald-50/70 p-6 text-center">
+            <Check className="mx-auto mb-2 h-10 w-10 text-emerald-500" />
+            <p className="font-bold text-emerald-800">
+              No quedan tareas pendientes
+            </p>
+            <p className="mt-1 text-sm text-emerald-700">
+              Podés revisar el historial desde Tareas.
+            </p>
           </Card>
         )}
+      </motion.section>
+
+      {/* Escaneo secundario */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="mb-6"
+      >
+        <Card className="border-2 border-[#386FA4]/20 bg-white p-4 shadow-md">
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#386FA4]/10">
+              <ScanLine className="h-7 w-7 text-[#386FA4]" />
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-[#12130F]">Escanear producto</p>
+              <p className="text-sm text-[#386FA4]">
+                Sumá productos a tu colección.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            onClick={onScanClick}
+            className="w-full rounded-xl bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+          >
+            <ScanLine className="mr-2 h-5 w-5" />
+            Abrir escáner
+          </Button>
+        </Card>
       </motion.div>
 
+      {/* Estadísticas al final */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-[#386FA4]" />
+            <h2 className="text-lg font-bold text-[#12130F]">
+              Estadísticas
+            </h2>
+          </div>
+
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onCollectionClick}
+            className="text-[#386FA4] hover:bg-[#386FA4]/10"
+          >
+            Ver colección
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <Card className="border-0 bg-gradient-to-br from-[#386FA4] to-[#2d5a85] p-3 text-center text-white shadow-md">
+            <Package className="mx-auto mb-2 h-6 w-6" />
+            <p className="text-2xl font-bold">{totalProducts}</p>
+            <p className="text-xs text-white/80">Productos</p>
+          </Card>
+
+          <Card className="border-0 bg-gradient-to-br from-[#7CAE7A] to-[#5d9259] p-3 text-center text-white shadow-md">
+            <Grid3x3 className="mx-auto mb-2 h-6 w-6" />
+            <p className="text-2xl font-bold">{categoriesCount}</p>
+            <p className="text-xs text-white/80">Categorías</p>
+          </Card>
+
+          <Card className="border-0 bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] p-3 text-center text-white shadow-md">
+            <ListTodo className="mx-auto mb-2 h-6 w-6" />
+            <p className="text-2xl font-bold">{completedTasksToday}</p>
+            <p className="text-xs text-white/80">Hechas hoy</p>
+          </Card>
+        </div>
+      </motion.section>
+
+      {/* Menú de perfil */}
       <AnimatePresence>
         {showProfileMenu && (
           <motion.div
-            className="fixed inset-0 z-40 flex"
+            className="fixed inset-0 z-50 flex"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <div
-              className="flex-1 bg-black/40"
+              className="flex-1 bg-black/45"
               onClick={() => setShowProfileMenu(false)}
+              aria-hidden="true"
             />
-            <motion.div
-              className="w-[82%] max-w-xs bg-gradient-to-b from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-2xl"
-              initial={{ x: "-100%" }}
+
+            <motion.aside
+              className="flex h-full w-[84%] max-w-xs flex-col bg-gradient-to-b from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-2xl"
+              initial={{ x: "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
+              exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 260, damping: 30 }}
             >
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="h-14 w-14 rounded-full bg-white/20 flex items-center justify-center text-2xl">
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full bg-white/20">
                     <img
                       src={avatar}
                       alt={`Avatar de ${username}`}
-                      className="h-full w-full object-cover rounded-full"
+                      className="h-full w-full object-cover"
                     />
                   </div>
-                  <div>
-                    <p className="text-lg font-semibold">{username}</p>
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-semibold">{username}</p>
                     <p className="text-xs text-white/80">Nivel {userLevel}</p>
                   </div>
                 </div>
+
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   className="text-white hover:bg-white/20"
                   onClick={() => setShowProfileMenu(false)}
+                  aria-label="Cerrar menú"
                 >
-                  <XCircle className="w-5 h-5" />
+                  <XCircle className="h-5 w-5" />
                 </Button>
               </div>
 
-              <div className="flex items-center gap-2 mb-6">
+              <div className="mb-6 flex gap-2">
                 <Button
+                  type="button"
                   size="sm"
                   className="bg-emerald-400 text-white hover:bg-emerald-500"
                   onClick={() => setShowAvatarModal(true)}
                 >
-                  <UserRoundCog className="w-4 h-4 mr-2" />
+                  <UserRoundCog className="mr-2 h-4 w-4" />
                   Avatar
                 </Button>
+
                 <Button
+                  type="button"
                   size="sm"
                   className="bg-white/20 text-white hover:bg-white/30"
                   onClick={() => {
@@ -365,53 +446,47 @@ export function Home({
                     setShowNameModal(true);
                   }}
                 >
-                  <Settings className="w-4 h-4 mr-2" />
+                  <Settings className="mr-2 h-4 w-4" />
                   Nombre
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <Card className="bg-white/95 text-[#12130F] p-3">
-                  <p className="text-xs text-[#386FA4]">Puntos</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Card className="bg-white/95 p-3 text-[#12130F]">
+                  <p className="text-xs text-[#386FA4]">Puntos disponibles</p>
                   <p className="text-lg font-bold">{totalPoints}</p>
                 </Card>
-                <Card className="bg-white/95 text-[#12130F] p-3">
+                <Card className="bg-white/95 p-3 text-[#12130F]">
                   <p className="text-xs text-[#386FA4]">Racha</p>
                   <p className="text-lg font-bold">{dailyStreak} días</p>
                 </Card>
-                <Card className="bg-white/95 text-[#12130F] p-3">
-                  <p className="text-xs text-[#386FA4]">Productos</p>
-                  <p className="text-lg font-bold">{totalProducts}</p>
-                </Card>
-                <Card className="bg-white/95 text-[#12130F] p-3">
-                  <p className="text-xs text-[#386FA4]">Categorías</p>
-                  <p className="text-lg font-bold">{categoriesCount}</p>
-                </Card>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-auto pt-6">
                 <Button
+                  type="button"
                   className="w-full bg-white text-[#386FA4] hover:bg-white/90"
                   onClick={onLogout}
                 >
-                  Cerrar sesión
+                  Salir de la cuenta
                 </Button>
               </div>
-            </motion.div>
+            </motion.aside>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* Cambiar nombre */}
       <AnimatePresence>
         {showNameModal && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 px-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <Card className="w-full max-w-sm p-6 bg-white">
-              <h3 className="text-lg font-bold text-[#12130F] mb-3">
+            <Card className="w-full max-w-sm bg-white p-6">
+              <h3 className="mb-3 text-lg font-bold text-[#12130F]">
                 Editar nombre de perfil
               </h3>
               <Input
@@ -421,10 +496,15 @@ export function Home({
                 className="mb-4"
               />
               <div className="flex gap-3">
-                <Button variant="secondary" onClick={() => setShowNameModal(false)}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setShowNameModal(false)}
+                >
                   Cancelar
                 </Button>
                 <Button
+                  type="button"
                   className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
                   onClick={() => {
                     if (pendingName.trim()) {
@@ -441,23 +521,29 @@ export function Home({
         )}
       </AnimatePresence>
 
+      {/* Cambiar avatar */}
       <AnimatePresence>
         {showAvatarModal && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 px-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <Card className="w-full max-w-md p-6 bg-white">
-              <div className="flex items-center justify-between mb-4">
+            <Card className="w-full max-w-md bg-white p-6">
+              <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-bold text-[#12130F]">
                   Elegí tu avatar
                 </h3>
-                <Button variant="ghost" onClick={() => setShowAvatarModal(false)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowAvatarModal(false)}
+                >
                   Cerrar
                 </Button>
               </div>
+
               <div className="grid grid-cols-3 gap-4">
                 {avatarOptions.map((option) => (
                   <button
@@ -478,7 +564,7 @@ export function Home({
                       alt={option.label}
                       className="w-full rounded-xl object-cover"
                     />
-                    <p className="mt-2 text-xs text-[#386FA4] font-semibold">
+                    <p className="mt-2 text-xs font-semibold text-[#386FA4]">
                       {option.label}
                     </p>
                   </button>
