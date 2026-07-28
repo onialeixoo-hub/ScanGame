@@ -37,13 +37,10 @@ import type {
   UserProgress
 } from "./types";
 import { normalizeCategory, rarityBaseXp, rarityFromBarcode, streakBonusByDays } from "./lib/products";
-import avatarHoodie from "@/assets/avatars/avatar-hoodie.svg";
-import avatarHeadset from "@/assets/avatars/avatar-headset.svg";
-import avatarCap from "@/assets/avatars/avatar-cap.svg";
-import avatarPlay from "@/assets/avatars/avatar-play.svg";
-import avatarPepsi from "@/assets/avatars/avatar-pepsi.svg";
-import avatarCamera from "@/assets/avatars/avatar-camera.svg";
-import avatarGlasses from "@/assets/avatars/avatar-glasses.svg";
+import {
+  DEFAULT_USER_AVATAR,
+  normalizeAvatarId
+} from "./lib/avatar-options";
 
 const DAILY_GOAL = 3;
 const BONUS_POINTS = 50;
@@ -55,7 +52,7 @@ const initialUsers: User[] = [
     username: "martialeixo",
     pin: "",
     role: "user",
-    avatar: avatarHoodie
+    avatar: DEFAULT_USER_AVATAR
   },
   {
     id: "admin-1",
@@ -63,7 +60,7 @@ const initialUsers: User[] = [
     username: "onialeixo",
     pin: "",
     role: "admin",
-    avatar: avatarHeadset
+    avatar: ""
   }
 ];
 
@@ -210,9 +207,7 @@ export default function App() {
           username: firebaseUser.email ?? profile.email ?? "",
           pin: "",
           role: profile.role,
-          avatar:
-            profile.avatar ??
-            (profile.role === "admin" ? avatarHeadset : avatarHoodie)
+          avatar: normalizeAvatarId(profile.avatar, profile.role)
         };
 
         setCurrentUser(restoredUser);
@@ -273,9 +268,7 @@ export default function App() {
             username: profile.email ?? "",
             pin: "",
             role: profile.role,
-            avatar:
-              profile.avatar ??
-              (profile.role === "admin" ? avatarHeadset : avatarHoodie)
+            avatar: normalizeAvatarId(profile.avatar, profile.role)
           });
         });
 
