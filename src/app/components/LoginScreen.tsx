@@ -75,7 +75,7 @@ export function LoginScreen({ users, onLogin }: LoginScreenProps) {
         name: profile.name ?? "Usuario",
         username:
           credential.user.email ?? email.trim(),
-        pin: password,
+        pin: "",
         role: profile.role,
         avatar: previousUserWithSameRole?.avatar ?? ""
       };
