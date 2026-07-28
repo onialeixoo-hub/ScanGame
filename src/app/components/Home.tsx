@@ -113,17 +113,17 @@ export function Home({
     100
   );
 
-  const todayTasks = tasks.filter((task) => !task.completed).slice(0, 4);
+  const todayTasks = tasks.filter((task) => !task.completed).slice(0, 2);
 
   return (
-    <div className="min-h-screen bg-[#E2DADB] px-5 pb-24 pt-5">
+    <div className="min-h-screen bg-[#E2DADB] px-4 pb-24 pt-3">
       {/* Encabezado */}
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-4 flex items-center gap-3"
+        className="mb-2 flex items-center gap-2.5"
       >
-        <div className="h-14 w-14 overflow-hidden rounded-full border-4 border-white bg-white shadow-md">
+        <div className="h-11 w-11 overflow-hidden rounded-full border-2 border-white bg-white shadow-md">
           <img
             src={avatar}
             alt={`Avatar de ${username}`}
@@ -132,10 +132,10 @@ export function Home({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[#386FA4]">
+          <p className="text-xs font-semibold text-[#386FA4]">
             Bienvenido de nuevo
           </p>
-          <h1 className="truncate text-2xl font-bold text-[#12130F]">
+          <h1 className="truncate text-xl font-bold leading-tight text-[#12130F]">
             {username}
           </h1>
         </div>
@@ -144,10 +144,10 @@ export function Home({
           type="button"
           size="icon"
           onClick={() => setShowProfileMenu(true)}
-          className="h-12 w-12 rounded-2xl bg-[#386FA4] text-white shadow-lg hover:bg-[#2d5a85]"
+          className="h-10 w-10 rounded-xl bg-[#386FA4] text-white shadow-lg hover:bg-[#2d5a85]"
           aria-label="Abrir menú"
         >
-          <Menu className="h-6 w-6" />
+          <Menu className="h-5 w-5" />
         </Button>
       </motion.div>
 
@@ -156,26 +156,26 @@ export function Home({
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.05 }}
-        className="mb-4"
+        className="mb-2.5"
       >
-        <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-xl">
-          <div className="mb-4 flex items-center gap-4">
-            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-white/20 text-2xl font-bold shadow-inner">
+        <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#386FA4] to-[#2d5a85] p-3.5 text-white shadow-xl">
+          <div className="mb-2.5 flex items-center gap-3">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-white/20 text-xl font-bold shadow-inner">
               {userLevel}
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white/75">
+              <p className="text-xs font-semibold text-white/75">
                 Nivel actual
               </p>
-              <p className="text-2xl font-bold">Nivel {userLevel}</p>
+              <p className="text-xl font-bold leading-tight">Nivel {userLevel}</p>
               <p className="text-xs text-white/75">
                 {xpRequiredForCurrentLevel - xpInCurrentLevel} XP para subir
               </p>
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="font-semibold">XP del nivel</span>
               <span className="text-right font-bold">
@@ -184,7 +184,7 @@ export function Home({
             </div>
             <Progress
               value={xpPercentage}
-              className="h-3 bg-white/20"
+              className="h-2.5 bg-white/20"
             />
           </div>
         </Card>
@@ -195,23 +195,23 @@ export function Home({
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="mb-5 grid grid-cols-2 gap-3"
+        className="mb-3 grid grid-cols-2 gap-2.5"
       >
-        <Card className="border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 shadow-md">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/20">
-            <Star className="h-6 w-6 fill-amber-400 text-amber-500" />
+        <Card className="border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-3 shadow-md">
+          <div className="mb-1 flex h-8 w-8 items-center justify-center rounded-lg bg-amber-400/20">
+            <Star className="h-5 w-5 fill-amber-400 text-amber-500" />
           </div>
-          <p className="text-2xl font-bold text-amber-950">{totalPoints}</p>
+          <p className="text-xl font-bold leading-tight text-amber-950">{totalPoints}</p>
           <p className="text-xs font-semibold text-amber-700">
             Puntos disponibles
           </p>
         </Card>
 
-        <Card className="border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-amber-100 p-4 shadow-md">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-400/20">
-            <Flame className="h-6 w-6 text-orange-500" />
+        <Card className="border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-amber-100 p-3 shadow-md">
+          <div className="mb-1 flex h-8 w-8 items-center justify-center rounded-lg bg-orange-400/20">
+            <Flame className="h-5 w-5 text-orange-500" />
           </div>
-          <p className="text-2xl font-bold text-orange-950">
+          <p className="text-xl font-bold leading-tight text-orange-950">
             {dailyStreak} días
           </p>
           <p className="text-xs font-semibold text-orange-700">
@@ -225,14 +225,14 @@ export function Home({
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
-        className="mb-5"
+        className="mb-3"
       >
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg font-bold text-[#12130F]">
+            <h2 className="text-base font-bold text-[#12130F]">
               Tareas del día
             </h2>
-            <p className="text-sm text-[#386FA4]">
+            <p className="text-xs text-[#386FA4]">
               {activeTasks} pendiente{activeTasks === 1 ? "" : "s"}
             </p>
           </div>
@@ -241,7 +241,7 @@ export function Home({
             type="button"
             variant="ghost"
             onClick={onTasksClick}
-            className="text-[#386FA4] hover:bg-[#386FA4]/10"
+            className="h-8 px-2 text-xs text-[#386FA4] hover:bg-[#386FA4]/10"
           >
             Ver todas
             <ArrowRight className="ml-1 h-4 w-4" />
@@ -249,7 +249,7 @@ export function Home({
         </div>
 
         {todayTasks.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {todayTasks.map((task, index) => (
               <motion.div
                 key={task.id}
@@ -257,22 +257,22 @@ export function Home({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.18 + index * 0.05 }}
               >
-                <Card className="border-2 border-[#386FA4]/15 bg-white p-4 shadow-sm">
+                <Card className="border-2 border-[#386FA4]/15 bg-white p-3 shadow-sm">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => onCompleteTask(task.id)}
-                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#386FA4] transition hover:bg-[#386FA4]"
+                      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#386FA4] transition hover:bg-[#386FA4]"
                       aria-label={`Completar ${task.title}`}
                     >
-                      <Check className="h-5 w-5 text-[#386FA4]" />
+                      <Check className="h-4 w-4 text-[#386FA4]" />
                     </button>
 
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-bold text-[#12130F]">
                         {task.title}
                       </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
                         <span className="rounded-full bg-purple-100 px-2 py-1 font-semibold text-purple-700">
                           +{task.xpReward} XP
                         </span>
@@ -289,12 +289,12 @@ export function Home({
             ))}
           </div>
         ) : (
-          <Card className="border-2 border-dashed border-emerald-300 bg-emerald-50/70 p-6 text-center">
-            <Check className="mx-auto mb-2 h-10 w-10 text-emerald-500" />
-            <p className="font-bold text-emerald-800">
+          <Card className="border-2 border-dashed border-emerald-300 bg-emerald-50/70 px-4 py-3 text-center">
+            <Check className="mx-auto mb-1 h-7 w-7 text-emerald-500" />
+            <p className="text-sm font-bold text-emerald-800">
               No quedan tareas pendientes
             </p>
-            <p className="mt-1 text-sm text-emerald-700">
+            <p className="mt-0.5 text-xs text-emerald-700">
               Podés revisar el historial desde Tareas.
             </p>
           </Card>
@@ -306,29 +306,32 @@ export function Home({
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="mb-6"
+        className="mb-4"
       >
-        <Card className="border-2 border-[#386FA4]/20 bg-white p-4 shadow-md">
-          <div className="mb-3 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#386FA4]/10">
-              <ScanLine className="h-7 w-7 text-[#386FA4]" />
+        <Card className="border-2 border-[#386FA4]/20 bg-white p-3 shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#386FA4]/10">
+              <ScanLine className="h-6 w-6 text-[#386FA4]" />
             </div>
-            <div className="flex-1">
-              <p className="font-bold text-[#12130F]">Escanear producto</p>
-              <p className="text-sm text-[#386FA4]">
+
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-[#12130F]">
+                Escanear producto
+              </p>
+              <p className="truncate text-xs text-[#386FA4]">
                 Sumá productos a tu colección.
               </p>
             </div>
-          </div>
 
-          <Button
-            type="button"
-            onClick={onScanClick}
-            className="w-full rounded-xl bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
-          >
-            <ScanLine className="mr-2 h-5 w-5" />
-            Abrir escáner
-          </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={onScanClick}
+              className="flex-shrink-0 rounded-xl bg-gradient-to-r from-[#386FA4] to-[#2d5a85] px-3 text-white"
+            >
+              Escanear
+            </Button>
+          </div>
         </Card>
       </motion.div>
 
