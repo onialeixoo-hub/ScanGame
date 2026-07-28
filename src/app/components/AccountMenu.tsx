@@ -9,6 +9,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import type { User, UserProgress } from "@/app/types";
+import { getAvatarSrc } from "@/app/lib/avatar-options";
 
 interface AccountMenuProps {
   open: boolean;
@@ -30,6 +31,7 @@ export function AccountMenu({
   onLogout
 }: AccountMenuProps) {
   const isAdmin = user.role === "admin";
+  const avatarSrc = getAvatarSrc(user.avatar, user.role);
 
   return (
     <AnimatePresence>
@@ -56,12 +58,14 @@ export function AccountMenu({
             <div className="mb-6 flex items-center justify-between">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full bg-white/20">
-                  {user.avatar ? (
+                  {avatarSrc ? (
                     <img
-                      src={user.avatar}
+                      src={avatarSrc}
                       alt={`Avatar de ${user.name}`}
                       className="h-full w-full object-cover"
                     />
+                  ) : isAdmin ? (
+                    <ShieldCheck className="m-3 h-8 w-8 text-white" />
                   ) : (
                     <UserRound className="m-3 h-8 w-8 text-white" />
                   )}
