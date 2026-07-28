@@ -24,7 +24,8 @@ import {
   runTransaction,
   setDoc,
   updateDoc,
-  where
+  where,
+  writeBatch
 } from "firebase/firestore";
 import { auth, db } from "@/firebase";
 import type {
@@ -878,112 +879,271 @@ export default function App() {
     setActiveTab("home");
   };
 
-  const handleCreateClaim = async (taskId: string, note: string) => {
-    if (!currentUser) return;
+  const handleCreateClaim = async (
+    taskId: string,
+    note: string
+  ) => {
+    if (!currentUser || currentUser.role !== "user") return;
+
+    const alreadyPending = claims.some(
+      (claim) =>
+        claim.userId === currentUser.id &&
+        claim.taskId === taskId &&
+        claim.status === "pending"
+    );
+
+    if (alreadyPending) {
+      toast.error(
+        "Esta tarea ya está pendiente de aprobación"
+      );
+      return;
+    }
 
     const trimmedNote = note.trim();
 
     try {
-      await addDoc(collection(db, "taskClaims"), {
-        taskId,
-        userId: currentUser.id,
-        status: "pending",
-        timestamp: new Date().toISOString(),
-        ...(trimmedNote ? { note: trimmedNote } : {})
-      });
-    } catch {
-      toast.error("No se pudo enviar la tarea para aprobación");
+      await addDoc(
+        collection(db, "taskClaims"),
+        {
+          taskId,
+          userId: currentUser.id,
+          status: "pending",
+          timestamp: new Date().toISOString(),
+          ...(trimmedNote
+            ? { note: trimmedNote }
+            : {})
+        }
+      );
+
+      toast.success("Tarea enviada para aprobación");
+    } catch (error) {
+      console.error(
+        "Error al enviar la tarea:",
+        error
+      );
+      toast.error(
+        "No se pudo enviar la tarea para aprobación"
+      );
     }
   };
 
   const handleApproveClaim = async (claimId: string) => {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.role !== "admin") return;
 
-    const approvedClaim = claims.find((claim) => claim.id === claimId);
-    if (!approvedClaim) return;
+    const approvedClaim = claims.find(
+      (claim) => claim.id === claimId
+    );
+    if (!approvedClaim) {
+      toast.error("La solicitud ya no está disponible");
+      return;
+    }
 
-    const task = tasks.find((item) => item.id === approvedClaim.taskId);
-    if (!task) return;
+    const task = tasks.find(
+      (item) => item.id === approvedClaim.taskId
+    );
+    if (!task) {
+      toast.error("No se encontró la tarea asociada");
+      return;
+    }
 
+    const claimReference = doc(
+      db,
+      "taskClaims",
+      claimId
+    );
+    const progressReference = doc(
+      db,
+      "userProgress",
+      approvedClaim.userId
+    );
     const approvedAt = new Date().toISOString();
-    const approvedTodayCount =
-      claims.filter(
-        (claim) =>
-          claim.userId === approvedClaim.userId &&
-          claim.status === "approved" &&
-          claim.approvedAt &&
-          new Date(claim.approvedAt).toDateString() === todayKey
-      ).length + 1;
 
     try {
-      await runTransaction(db, async (transaction) => {
-        const claimReference = doc(db, "taskClaims", claimId);
-        const progressReference = doc(
-          db,
-          "userProgress",
-          approvedClaim.userId
+      const [claimSnapshot, progressSnapshot] =
+        await Promise.all([
+          getDoc(claimReference),
+          getDoc(progressReference)
+        ]);
+
+      if (!claimSnapshot.exists()) {
+        toast.error("La solicitud ya no existe");
+        return;
+      }
+
+      const claimData =
+        claimSnapshot.data() as TaskClaim;
+
+      if (claimData.status !== "pending") {
+        toast.error(
+          "Esta solicitud ya fue aprobada o rechazada"
         );
+        return;
+      }
 
-        const claimSnapshot = await transaction.get(claimReference);
-        if (!claimSnapshot.exists()) {
-          throw new Error("La solicitud ya no existe");
-        }
-
-        const claimData = claimSnapshot.data() as TaskClaim;
-        if (claimData.status !== "pending") return;
-
-        const progressSnapshot = await transaction.get(progressReference);
-        const currentProgress = progressSnapshot.exists()
+      const currentProgress =
+        progressSnapshot.exists()
           ? {
               ...initialProgress,
               ...(progressSnapshot.data() as UserProgress)
             }
-          : progressByUser[approvedClaim.userId] ?? initialProgress;
+          : progressByUser[approvedClaim.userId] ??
+            initialProgress;
 
-        const shouldApplyBonus =
-          approvedTodayCount >= DAILY_GOAL &&
-          currentProgress.bonusAwardedOn !== todayKey;
+      const approvedTodayCount =
+        claims.filter(
+          (claim) =>
+            claim.userId === approvedClaim.userId &&
+            claim.status === "approved" &&
+            claim.approvedAt &&
+            new Date(
+              claim.approvedAt
+            ).toDateString() === todayKey
+        ).length + 1;
 
-        transaction.update(claimReference, {
-          status: "approved",
-          approvedBy: currentUser.id,
-          approvedAt
-        });
+      const shouldApplyBonus =
+        approvedTodayCount >= DAILY_GOAL &&
+        currentProgress.bonusAwardedOn !== todayKey;
 
-        transaction.set(
-          progressReference,
-          {
-            ...currentProgress,
-            xp:
-              currentProgress.xp +
-              task.xp +
-              (shouldApplyBonus ? BONUS_POINTS : 0),
-            points:
-              currentProgress.points +
-              task.points +
-              (shouldApplyBonus ? BONUS_POINTS : 0),
-            bonusAwardedOn: shouldApplyBonus
-              ? todayKey
-              : currentProgress.bonusAwardedOn
-          },
-          { merge: true }
-        );
+      const nextProgress: UserProgress = {
+        ...currentProgress,
+        xp:
+          currentProgress.xp +
+          task.xp +
+          (shouldApplyBonus ? BONUS_POINTS : 0),
+        points:
+          currentProgress.points +
+          task.points +
+          (shouldApplyBonus ? BONUS_POINTS : 0),
+        bonusAwardedOn: shouldApplyBonus
+          ? todayKey
+          : currentProgress.bonusAwardedOn
+      };
+
+      const batch = writeBatch(db);
+
+      const duplicatePendingClaims = claims.filter(
+        (claim) =>
+          claim.id !== claimId &&
+          claim.userId === approvedClaim.userId &&
+          claim.taskId === approvedClaim.taskId &&
+          claim.status === "pending"
+      );
+
+      duplicatePendingClaims.forEach(
+        (duplicateClaim) => {
+          batch.delete(
+            doc(
+              db,
+              "taskClaims",
+              duplicateClaim.id
+            )
+          );
+        }
+      );
+
+      batch.update(claimReference, {
+        status: "approved",
+        approvedBy: currentUser.id,
+        approvedAt
       });
-    } catch {
+
+      batch.set(
+        progressReference,
+        cleanFirestoreData(
+          nextProgress as unknown as Record<
+            string,
+            unknown
+          >
+        ),
+        { merge: true }
+      );
+
+      await batch.commit();
+
+      toast.success("Tarea aprobada");
+    } catch (error) {
+      console.error(
+        "Error al aprobar la tarea:",
+        error
+      );
+
+      const firebaseMessage =
+        error instanceof Error
+          ? error.message
+          : "";
+
+      if (
+        firebaseMessage.includes(
+          "permission-denied"
+        ) ||
+        firebaseMessage.includes(
+          "Missing or insufficient permissions"
+        )
+      ) {
+        toast.error(
+          "Firebase no dio permiso para actualizar el progreso"
+        );
+        return;
+      }
+
       toast.error("No se pudo aprobar la tarea");
     }
   };
 
-  const handleRejectClaim = async (claimId: string, note: string) => {
-    if (!currentUser) return;
+  const handleRejectClaim = async (
+    claimId: string,
+    note: string
+  ) => {
+    if (!currentUser || currentUser.role !== "admin") return;
+
+    const selectedClaim = claims.find(
+      (claim) => claim.id === claimId
+    );
+
+    if (!selectedClaim) {
+      toast.error("La solicitud ya no está disponible");
+      return;
+    }
+
+    const rejectedAt = new Date().toISOString();
+    const cleanNote = note.trim();
+
+    const pendingClaimsForSameTask =
+      claims.filter(
+        (claim) =>
+          claim.userId === selectedClaim.userId &&
+          claim.taskId === selectedClaim.taskId &&
+          claim.status === "pending"
+      );
 
     try {
-      await updateDoc(doc(db, "taskClaims", claimId), {
-        status: "rejected",
-        rejectionNote: note.trim(),
-        rejectedAt: new Date().toISOString()
-      });
-    } catch {
+      const batch = writeBatch(db);
+
+      pendingClaimsForSameTask.forEach(
+        (pendingClaim) => {
+          batch.update(
+            doc(
+              db,
+              "taskClaims",
+              pendingClaim.id
+            ),
+            {
+              status: "rejected",
+              rejectionNote: cleanNote,
+              rejectedAt
+            }
+          );
+        }
+      );
+
+      await batch.commit();
+
+      toast.success("Tarea rechazada");
+    } catch (error) {
+      console.error(
+        "Error al rechazar la tarea:",
+        error
+      );
       toast.error("No se pudo rechazar la tarea");
     }
   };
@@ -1198,7 +1358,7 @@ export default function App() {
     };
   });
 
-  const latestRejectedClaim =
+  const unseenRejectedClaims =
     currentUser?.role === "user"
       ? claims
           .filter(
@@ -1206,29 +1366,48 @@ export default function App() {
               claim.userId === currentUser.id &&
               claim.status === "rejected"
           )
+          .filter((claim) => {
+            const rejectionDate =
+              claim.rejectedAt ??
+              claim.timestamp;
+
+            if (
+              !activeProgress.lastSeenRejectionAt
+            ) {
+              return true;
+            }
+
+            return (
+              new Date(
+                rejectionDate
+              ).getTime() >
+              new Date(
+                activeProgress.lastSeenRejectionAt
+              ).getTime()
+            );
+          })
           .sort(
             (a, b) =>
-              new Date(b.rejectedAt ?? b.timestamp).getTime() -
-              new Date(a.rejectedAt ?? a.timestamp).getTime()
-          )[0]
+              new Date(
+                a.rejectedAt ?? a.timestamp
+              ).getTime() -
+              new Date(
+                b.rejectedAt ?? b.timestamp
+              ).getTime()
+          )
+      : [];
+
+  const rejectionNotification =
+    unseenRejectedClaims[0];
+
+  const rejectedNotificationTask =
+    rejectionNotification
+      ? tasks.find(
+          (task) =>
+            task.id ===
+            rejectionNotification.taskId
+        )
       : undefined;
-
-  const latestRejectionDate = latestRejectedClaim
-    ? latestRejectedClaim.rejectedAt ??
-      latestRejectedClaim.timestamp
-    : undefined;
-
-  const hasUnseenRejection =
-    Boolean(latestRejectedClaim && latestRejectionDate) &&
-    (!activeProgress.lastSeenRejectionAt ||
-      new Date(latestRejectionDate as string).getTime() >
-        new Date(activeProgress.lastSeenRejectionAt).getTime());
-
-  const latestRejectedTask = latestRejectedClaim
-    ? tasks.find(
-        (task) => task.id === latestRejectedClaim.taskId
-      )
-    : undefined;
 
   const levelInfo = getLevelInfo(activeProgress.xp);
 
@@ -1329,7 +1508,7 @@ export default function App() {
         onLogout={() => void handleLogout()}
       />
 
-      {hasUnseenRejection && latestRejectedClaim && (
+      {rejectionNotification && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 px-6">
           <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 py-7 text-center text-white">
@@ -1339,6 +1518,11 @@ export default function App() {
               <p className="mt-2 text-sm text-white/90">
                 Revisá el motivo antes de volver a enviarla.
               </p>
+              {unseenRejectedClaims.length > 1 && (
+                <p className="mt-2 text-xs font-semibold text-white">
+                  Quedan {unseenRejectedClaims.length} avisos por revisar
+                </p>
+              )}
             </div>
 
             <div className="space-y-4 px-6 py-5">
@@ -1347,7 +1531,7 @@ export default function App() {
                   Tarea
                 </p>
                 <p className="mt-1 text-lg font-bold text-[#12130F]">
-                  {latestRejectedTask?.title ?? "Tarea"}
+                  {rejectedNotificationTask?.title ?? "Tarea"}
                 </p>
               </div>
 
@@ -1356,7 +1540,7 @@ export default function App() {
                   Motivo
                 </p>
                 <p className="mt-1 text-sm text-red-700">
-                  {latestRejectedClaim.rejectionNote?.trim() ||
+                  {rejectionNotification.rejectionNote?.trim() ||
                     "No se informó un motivo"}
                 </p>
               </div>
@@ -1364,8 +1548,8 @@ export default function App() {
               <p className="text-xs text-[#386FA4]">
                 Rechazada el{" "}
                 {new Date(
-                  latestRejectedClaim.rejectedAt ??
-                    latestRejectedClaim.timestamp
+                  rejectionNotification.rejectedAt ??
+                    rejectionNotification.timestamp
                 ).toLocaleString("es-AR", {
                   day: "2-digit",
                   month: "short",
@@ -1379,7 +1563,7 @@ export default function App() {
                 className="w-full bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
                 onClick={() =>
                   void handleMarkRejectionSeen(
-                    latestRejectedClaim
+                    rejectionNotification
                   )
                 }
               >
