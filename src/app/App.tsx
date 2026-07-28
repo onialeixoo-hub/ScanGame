@@ -247,15 +247,7 @@ export default function App() {
   }, [progressByUser]);
 
   useEffect(() => {
-    if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#E2DADB] flex items-center justify-center">
-        <p className="text-[#386FA4] font-semibold">Cargando ScanGame...</p>
-      </div>
-    );
-  }
-
-  if (!currentUser) {
+    if (!currentUser) {
       setTasks([]);
       setClaims([]);
       tasksSeededRef.current = false;
@@ -826,6 +818,14 @@ export default function App() {
   });
 
   const levelInfo = getLevelInfo(activeProgress.xp);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#E2DADB] flex items-center justify-center">
+        <p className="text-[#386FA4] font-semibold">Cargando ScanGame...</p>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <LoginScreen users={users} onLogin={setCurrentUser} />;
