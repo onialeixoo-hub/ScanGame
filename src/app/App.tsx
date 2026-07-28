@@ -21,6 +21,7 @@ import {
   getDoc,
   onSnapshot,
   query,
+  runTransaction,
   setDoc,
   updateDoc,
   where
@@ -106,9 +107,9 @@ const initialTasks: Task[] = [
 ];
 
 const initialProgress: UserProgress = {
-  xp: 1250,
-  points: 320,
-  streak: 4,
+  xp: 0,
+  points: 0,
+  streak: 0,
   bonusAwardedOn: "",
   scanStreak: 0,
   lastScanDate: ""
@@ -126,21 +127,10 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [claims, setClaims] = useState<TaskClaim[]>([]);
   const tasksSeededRef = useRef(false);
-  const [progressByUser, setProgressByUser] = useState<Record<string, UserProgress>>(
-    () => {
-      if (typeof window === "undefined") {
-        return { "user-1": initialProgress };
-      }
-      try {
-        const stored = localStorage.getItem(PROGRESS_STORAGE_KEY);
-        return stored
-          ? (JSON.parse(stored) as Record<string, UserProgress>)
-          : { "user-1": initialProgress };
-      } catch (error) {
-        return { "user-1": initialProgress };
-      }
-    }
-  );
+  const [progressByUser, setProgressByUser] = useState<
+    Record<string, UserProgress>
+  >({});
+  const progressSeededRef = useRef<Set<string>>(new Set());
   const [collectionByUser, setCollectionByUser] = useState<
     Record<string, CollectedProduct[]>
   >(() => {
@@ -244,10 +234,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify(collectionByUser));
   }, [collectionByUser]);
-
-  useEffect(() => {
-    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progressByUser));
-  }, [progressByUser]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -368,6 +354,103 @@ export default function App() {
     };
   }, [currentUser]);
 
+  useEffect(() => {
+    if (!currentUser) {
+      setProgressByUser({});
+      return;
+    }
+
+    const getStoredProgress = (userId: string): UserProgress => {
+      if (typeof window === "undefined") return initialProgress;
+
+      try {
+        const stored = localStorage.getItem(PROGRESS_STORAGE_KEY);
+        if (!stored) return initialProgress;
+
+        const parsed = JSON.parse(stored) as Record<string, UserProgress>;
+        return parsed[userId] ?? parsed["user-1"] ?? initialProgress;
+      } catch {
+        return initialProgress;
+      }
+    };
+
+    if (currentUser.role === "admin") {
+      const progressCollection = collection(db, "userProgress");
+
+      return onSnapshot(
+        progressCollection,
+        (snapshot) => {
+          const remoteProgress: Record<string, UserProgress> = {};
+
+          snapshot.docs.forEach((progressDocument) => {
+            remoteProgress[progressDocument.id] = {
+              ...initialProgress,
+              ...(progressDocument.data() as UserProgress)
+            };
+          });
+
+          setProgressByUser(remoteProgress);
+
+          users
+            .filter((user) => user.role === "user" && user.id !== "user-1")
+            .forEach((user) => {
+              if (
+                remoteProgress[user.id] ||
+                progressSeededRef.current.has(user.id)
+              ) {
+                return;
+              }
+
+              progressSeededRef.current.add(user.id);
+
+              void setDoc(
+                doc(db, "userProgress", user.id),
+                getStoredProgress(user.id)
+              ).catch(() => {
+                progressSeededRef.current.delete(user.id);
+                toast.error("No se pudo migrar el progreso a Firebase");
+              });
+            });
+        },
+        () => {
+          toast.error("No se pudo cargar el progreso");
+        }
+      );
+    }
+
+    const progressReference = doc(db, "userProgress", currentUser.id);
+
+    return onSnapshot(
+      progressReference,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          setProgressByUser({
+            [currentUser.id]: {
+              ...initialProgress,
+              ...(snapshot.data() as UserProgress)
+            }
+          });
+          return;
+        }
+
+        if (progressSeededRef.current.has(currentUser.id)) return;
+
+        progressSeededRef.current.add(currentUser.id);
+
+        void setDoc(
+          progressReference,
+          getStoredProgress(currentUser.id)
+        ).catch(() => {
+          progressSeededRef.current.delete(currentUser.id);
+          toast.error("No se pudo crear el progreso en Firebase");
+        });
+      },
+      () => {
+        toast.error("No se pudo cargar el progreso");
+      }
+    );
+  }, [currentUser, users]);
+
   const isSameDay = (dateValue: string | undefined) => {
     if (!dateValue) return false;
     return new Date(dateValue).toDateString() === todayKey;
@@ -487,7 +570,7 @@ export default function App() {
     setIsFetchingProduct(false);
   };
 
-  const handleAddToCollection = () => {
+  const handleAddToCollection = async () => {
     if (!currentUser || !scannedProduct) return;
 
     const userCollection = collectionByUser[currentUser.id] ?? [];
@@ -539,21 +622,34 @@ export default function App() {
       [currentUser.id]: nextCollection
     }));
 
-    setProgressByUser((prev) => {
-      const currentProgress = prev[currentUser.id] ?? initialProgress;
-      const nextStreak = getNextScanStreak(currentProgress);
-      const isFirstScanToday = !isSameDay(currentProgress.lastScanDate);
+    const currentProgress = progressByUser[currentUser.id] ?? initialProgress;
+    const nextStreak = getNextScanStreak(currentProgress);
+    const isFirstScanToday = !isSameDay(currentProgress.lastScanDate);
+    const nextProgress: UserProgress = {
+      ...currentProgress,
+      xp: currentProgress.xp + scannedProduct.xpReward,
+      scanStreak: isFirstScanToday
+        ? nextStreak
+        : currentProgress.scanStreak,
+      lastScanDate: isFirstScanToday
+        ? now
+        : currentProgress.lastScanDate
+    };
 
-      return {
-        ...prev,
-        [currentUser.id]: {
-          ...currentProgress,
-          xp: currentProgress.xp + scannedProduct.xpReward,
-          scanStreak: isFirstScanToday ? nextStreak : currentProgress.scanStreak,
-          lastScanDate: isFirstScanToday ? now : currentProgress.lastScanDate
-        }
-      };
-    });
+    setProgressByUser((prev) => ({
+      ...prev,
+      [currentUser.id]: nextProgress
+    }));
+
+    try {
+      await setDoc(
+        doc(db, "userProgress", currentUser.id),
+        nextProgress,
+        { merge: true }
+      );
+    } catch {
+      toast.error("No se pudo guardar el progreso del escaneo");
+    }
 
     const baseReward = Math.max(
       scannedProduct.xpReward - scannedProduct.bonusDaily - scannedProduct.bonusStreak,
@@ -627,48 +723,72 @@ export default function App() {
     if (!task) return;
 
     const approvedAt = new Date().toISOString();
+    const approvedTodayCount =
+      claims.filter(
+        (claim) =>
+          claim.userId === approvedClaim.userId &&
+          claim.status === "approved" &&
+          claim.approvedAt &&
+          new Date(claim.approvedAt).toDateString() === todayKey
+      ).length + 1;
 
     try {
-      await updateDoc(doc(db, "taskClaims", claimId), {
-        status: "approved",
-        approvedBy: currentUser.id,
-        approvedAt
+      await runTransaction(db, async (transaction) => {
+        const claimReference = doc(db, "taskClaims", claimId);
+        const progressReference = doc(
+          db,
+          "userProgress",
+          approvedClaim.userId
+        );
+
+        const claimSnapshot = await transaction.get(claimReference);
+        if (!claimSnapshot.exists()) {
+          throw new Error("La solicitud ya no existe");
+        }
+
+        const claimData = claimSnapshot.data() as TaskClaim;
+        if (claimData.status !== "pending") return;
+
+        const progressSnapshot = await transaction.get(progressReference);
+        const currentProgress = progressSnapshot.exists()
+          ? {
+              ...initialProgress,
+              ...(progressSnapshot.data() as UserProgress)
+            }
+          : progressByUser[approvedClaim.userId] ?? initialProgress;
+
+        const shouldApplyBonus =
+          approvedTodayCount >= DAILY_GOAL &&
+          currentProgress.bonusAwardedOn !== todayKey;
+
+        transaction.update(claimReference, {
+          status: "approved",
+          approvedBy: currentUser.id,
+          approvedAt
+        });
+
+        transaction.set(
+          progressReference,
+          {
+            ...currentProgress,
+            xp:
+              currentProgress.xp +
+              task.xp +
+              (shouldApplyBonus ? BONUS_POINTS : 0),
+            points:
+              currentProgress.points +
+              task.points +
+              (shouldApplyBonus ? BONUS_POINTS : 0),
+            bonusAwardedOn: shouldApplyBonus
+              ? todayKey
+              : currentProgress.bonusAwardedOn
+          },
+          { merge: true }
+        );
       });
     } catch {
       toast.error("No se pudo aprobar la tarea");
-      return;
     }
-
-    setProgressByUser((prev) => {
-      const currentProgress = prev[approvedClaim.userId] ?? initialProgress;
-      const nextXP = currentProgress.xp + task.xp;
-      const nextPoints = currentProgress.points + task.points;
-
-      const approvedTodayCount =
-        claims.filter(
-          (claim) =>
-            claim.userId === approvedClaim.userId &&
-            claim.status === "approved" &&
-            claim.approvedAt &&
-            new Date(claim.approvedAt).toDateString() === todayKey
-        ).length + 1;
-
-      const shouldApplyBonus =
-        approvedTodayCount >= DAILY_GOAL &&
-        currentProgress.bonusAwardedOn !== todayKey;
-
-      return {
-        ...prev,
-        [approvedClaim.userId]: {
-          ...currentProgress,
-          xp: nextXP + (shouldApplyBonus ? BONUS_POINTS : 0),
-          points: nextPoints + (shouldApplyBonus ? BONUS_POINTS : 0),
-          bonusAwardedOn: shouldApplyBonus
-            ? todayKey
-            : currentProgress.bonusAwardedOn
-        }
-      };
-    });
   };
 
   const handleRejectClaim = async (claimId: string, note: string) => {
@@ -712,26 +832,26 @@ export default function App() {
   };
 
   const handleResetProgress = async () => {
+    const trackedUser = users.find((user) => user.role === "user" && user.id !== "user-1");
+    if (!trackedUser) {
+      toast.error("No se encontró la cuenta de Marti");
+      return;
+    }
+
     try {
-      await Promise.all(
-        claims.map((claim) =>
-          deleteDoc(doc(db, "taskClaims", claim.id))
-        )
+      const userClaims = claims.filter(
+        (claim) => claim.userId === trackedUser.id
       );
 
-      const affectedUserIds = [
-        ...new Set(claims.map((claim) => claim.userId))
-      ];
-
-      setProgressByUser((prev) => {
-        const nextProgress = { ...prev };
-
-        affectedUserIds.forEach((userId) => {
-          nextProgress[userId] = { ...initialProgress };
-        });
-
-        return nextProgress;
-      });
+      await Promise.all([
+        ...userClaims.map((claim) =>
+          deleteDoc(doc(db, "taskClaims", claim.id))
+        ),
+        setDoc(
+          doc(db, "userProgress", trackedUser.id),
+          initialProgress
+        )
+      ]);
     } catch {
       toast.error("No se pudo resetear el progreso");
     }
@@ -787,15 +907,23 @@ export default function App() {
     };
   };
 
-  const activeProgress = currentUser
-    ? progressByUser[currentUser.id] ?? initialProgress
+  const trackedUser = currentUser
+    ? currentUser.role === "admin"
+      ? users.find((user) => user.role === "user" && user.id !== "user-1") ?? currentUser
+      : currentUser
+    : null;
+
+  const activeProgress = trackedUser
+    ? progressByUser[trackedUser.id] ?? initialProgress
     : initialProgress;
 
-  const currentUserClaims = currentUser
-    ? claims.filter((claim) => claim.userId === currentUser.id)
+  const currentUserClaims = trackedUser
+    ? claims.filter((claim) => claim.userId === trackedUser.id)
     : [];
 
-  const userCollection = currentUser ? collectionByUser[currentUser.id] ?? [] : [];
+  const userCollection = trackedUser
+    ? collectionByUser[trackedUser.id] ?? []
+    : [];
 
   const approvedTodayCount = currentUserClaims.filter(
     (claim) =>
