@@ -21,13 +21,11 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Progress } from "@/app/components/ui/progress";
-import avatarHoodie from "@/assets/avatars/avatar-hoodie.svg";
-import avatarHeadset from "@/assets/avatars/avatar-headset.svg";
-import avatarCap from "@/assets/avatars/avatar-cap.svg";
-import avatarPlay from "@/assets/avatars/avatar-play.svg";
-import avatarPepsi from "@/assets/avatars/avatar-pepsi.svg";
-import avatarCamera from "@/assets/avatars/avatar-camera.svg";
-import avatarGlasses from "@/assets/avatars/avatar-glasses.svg";
+import {
+  AVATAR_OPTIONS,
+  getAvatarSrc,
+  normalizeAvatarId
+} from "@/app/lib/avatar-options";
 
 interface Task {
   id: string;
@@ -85,15 +83,8 @@ export function Home({
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [pendingName, setPendingName] = useState(username);
 
-  const avatarOptions = [
-    { id: "hoodie", src: avatarHoodie, label: "Hoodie" },
-    { id: "headset", src: avatarHeadset, label: "Headset" },
-    { id: "cap", src: avatarCap, label: "Gorra" },
-    { id: "play", src: avatarPlay, label: "Gaming" },
-    { id: "pepsi", src: avatarPepsi, label: "Pepsi" },
-    { id: "camera", src: avatarCamera, label: "Cámara" },
-    { id: "glasses", src: avatarGlasses, label: "Lentes" }
-  ];
+  const selectedAvatarId = normalizeAvatarId(avatar, "user");
+  const avatarSrc = getAvatarSrc(selectedAvatarId, "user");
 
   let levelStartXp = 0;
   let levelRequirement = 1000;
@@ -125,7 +116,7 @@ export function Home({
       >
         <div className="h-11 w-11 overflow-hidden rounded-full border-2 border-white bg-white shadow-md">
           <img
-            src={avatar}
+            src={avatarSrc}
             alt={`Avatar de ${username}`}
             className="h-full w-full object-cover"
           />
@@ -406,7 +397,7 @@ export function Home({
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full bg-white/20">
                     <img
-                      src={avatar}
+                      src={avatarSrc}
                       alt={`Avatar de ${username}`}
                       className="h-full w-full object-cover"
                     />
@@ -548,17 +539,17 @@ export function Home({
               </div>
 
               <div className="grid grid-cols-3 gap-4">
-                {avatarOptions.map((option) => (
+                {AVATAR_OPTIONS.map((option) => (
                   <button
                     key={option.id}
                     type="button"
                     className={`rounded-2xl border-2 p-2 transition ${
-                      avatar === option.src
+                      selectedAvatarId === option.id
                         ? "border-[#386FA4] bg-[#386FA4]/10"
                         : "border-transparent hover:border-[#386FA4]/40"
                     }`}
                     onClick={() => {
-                      onUpdateAvatar(option.src);
+                      onUpdateAvatar(option.id);
                       setShowAvatarModal(false);
                     }}
                   >
