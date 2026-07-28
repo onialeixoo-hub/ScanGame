@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { Toaster, toast } from "sonner";
 import { BottomNav } from "./components/BottomNav";
@@ -10,6 +10,18 @@ import { ScanResult } from "./components/ScanResult";
 import { Scanner } from "./components/Scanner";
 import { Tasks } from "./components/Tasks";
 import { Button } from "./components/ui/button";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
+  setDoc,
+  updateDoc,
+  where
+} from "firebase/firestore";
+import { db } from "@/firebase";
 import type {
   AppCategory,
   CollectedProduct,
@@ -36,7 +48,7 @@ const initialUsers: User[] = [
     id: "user-1",
     name: "Marti",
     username: "martialeixo",
-    pin: "1508",
+    pin: "",
     role: "user",
     avatar: avatarHoodie
   },
@@ -44,7 +56,7 @@ const initialUsers: User[] = [
     id: "admin-1",
     name: "Onia",
     username: "onialeixo",
-    pin: "2601",
+    pin: "",
     role: "admin",
     avatar: avatarHeadset
   }
@@ -100,42 +112,14 @@ const initialProgress: UserProgress = {
 
 const COLLECTION_STORAGE_KEY = "scanGame.collection";
 const PROGRESS_STORAGE_KEY = "scanGame.progress";
-const CURRENT_USER_KEY = "scanGame.currentUserId";
 const TASKS_STORAGE_KEY = "scanGame.tasks";
-const CLAIMS_STORAGE_KEY = "scanGame.claims";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>(initialUsers);
- const [tasks, setTasks] = useState<Task[]>(() => {
-  if (typeof window === "undefined") return initialTasks;
-
-  try {
-    const stored = localStorage.getItem(TASKS_STORAGE_KEY);
-
-    if (!stored) return initialTasks;
-
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? (parsed as Task[]) : initialTasks;
-  } catch {
-    return initialTasks;
-  }
-});
-
-const [claims, setClaims] = useState<TaskClaim[]>(() => {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const stored = localStorage.getItem(CLAIMS_STORAGE_KEY);
-
-    if (!stored) return [];
-
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? (parsed as TaskClaim[]) : [];
-  } catch {
-    return [];
-  }
-});
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [claims, setClaims] = useState<TaskClaim[]>([]);
+  const tasksSeededRef = useRef(false);
   const [progressByUser, setProgressByUser] = useState<Record<string, UserProgress>>(
     () => {
       if (typeof window === "undefined") {
@@ -201,30 +185,122 @@ const [claims, setClaims] = useState<TaskClaim[]>(() => {
   }, [progressByUser]);
 
   useEffect(() => {
-  localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
-}, [tasks]);
-
-useEffect(() => {
-  localStorage.setItem(CLAIMS_STORAGE_KEY, JSON.stringify(claims));
-}, [claims]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const storedUserId = localStorage.getItem(CURRENT_USER_KEY);
-    if (!storedUserId) return;
-    const matchedUser = users.find((user) => user.id === storedUserId);
-    if (matchedUser) {
-      setCurrentUser(matchedUser);
+    if (!currentUser) {
+      setTasks([]);
+      setClaims([]);
+      tasksSeededRef.current = false;
+      return;
     }
-  }, [users]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (currentUser) {
-      localStorage.setItem(CURRENT_USER_KEY, currentUser.id);
-    } else {
-      localStorage.removeItem(CURRENT_USER_KEY);
-    }
+    tasksSeededRef.current = false;
+
+    const usersCollection = collection(db, "users");
+    const tasksCollection = collection(db, "tasks");
+    const claimsCollection = collection(db, "taskClaims");
+
+    const unsubscribeUsers = onSnapshot(
+      usersCollection,
+      (snapshot) => {
+        const remoteUsers: User[] = [];
+
+        snapshot.docs.forEach((userDocument) => {
+          const profile = userDocument.data() as {
+            name?: string;
+            email?: string;
+            role?: "admin" | "user";
+          };
+
+          if (profile.role !== "admin" && profile.role !== "user") return;
+
+          remoteUsers.push({
+            id: userDocument.id,
+            name: profile.name ?? "Usuario",
+            username: profile.email ?? "",
+            pin: "",
+            role: profile.role,
+            avatar: profile.role === "admin" ? avatarHeadset : avatarHoodie
+          });
+        });
+
+        setUsers(remoteUsers);
+      },
+      () => {
+        toast.error("No se pudieron cargar los usuarios");
+      }
+    );
+
+    const unsubscribeTasks = onSnapshot(
+      tasksCollection,
+      (snapshot) => {
+        const remoteTasks = snapshot.docs.map((taskDocument) => ({
+          id: taskDocument.id,
+          ...(taskDocument.data() as Omit<Task, "id">)
+        }));
+
+        setTasks(remoteTasks);
+
+        if (
+          snapshot.empty &&
+          currentUser.role === "admin" &&
+          !tasksSeededRef.current
+        ) {
+          tasksSeededRef.current = true;
+
+          let tasksToMigrate = initialTasks;
+
+          try {
+            const storedTasks = localStorage.getItem(TASKS_STORAGE_KEY);
+            const parsedTasks = storedTasks ? JSON.parse(storedTasks) : null;
+
+            if (Array.isArray(parsedTasks) && parsedTasks.length > 0) {
+              tasksToMigrate = parsedTasks as Task[];
+            }
+          } catch {
+            tasksToMigrate = initialTasks;
+          }
+
+          void Promise.all(
+            tasksToMigrate.map(async ({ id, ...taskData }) => {
+              await setDoc(doc(db, "tasks", id), taskData);
+            })
+          ).catch(() => {
+            toast.error("No se pudieron migrar las tareas a Firebase");
+          });
+        }
+      },
+      () => {
+        toast.error("No se pudieron cargar las tareas");
+      }
+    );
+
+    const visibleClaims =
+      currentUser.role === "admin"
+        ? claimsCollection
+        : query(
+            claimsCollection,
+            where("userId", "==", currentUser.id)
+          );
+
+    const unsubscribeClaims = onSnapshot(
+      visibleClaims,
+      (snapshot) => {
+        const remoteClaims = snapshot.docs.map((claimDocument) => ({
+          id: claimDocument.id,
+          ...(claimDocument.data() as Omit<TaskClaim, "id">)
+        }));
+
+        setClaims(remoteClaims);
+      },
+      () => {
+        toast.error("No se pudieron cargar las solicitudes");
+      }
+    );
+
+    return () => {
+      unsubscribeUsers();
+      unsubscribeTasks();
+      unsubscribeClaims();
+    };
   }, [currentUser]);
 
   const isSameDay = (dateValue: string | undefined) => {
@@ -458,35 +534,26 @@ useEffect(() => {
     setActiveTab("home");
   };
 
-  const handleCreateClaim = (taskId: string, note: string) => {
+  const handleCreateClaim = async (taskId: string, note: string) => {
     if (!currentUser) return;
 
-    const newClaim: TaskClaim = {
-      id: `claim-${Date.now()}`,
-      taskId,
-      userId: currentUser.id,
-      status: "pending",
-      timestamp: new Date().toISOString(),
-      note: note.trim() ? note.trim() : undefined
-    };
+    const trimmedNote = note.trim();
 
-    setClaims((prev) => [newClaim, ...prev]);
+    try {
+      await addDoc(collection(db, "taskClaims"), {
+        taskId,
+        userId: currentUser.id,
+        status: "pending",
+        timestamp: new Date().toISOString(),
+        ...(trimmedNote ? { note: trimmedNote } : {})
+      });
+    } catch {
+      toast.error("No se pudo enviar la tarea para aprobación");
+    }
   };
 
-  const handleApproveClaim = (claimId: string) => {
+  const handleApproveClaim = async (claimId: string) => {
     if (!currentUser) return;
-    setClaims((prev) =>
-      prev.map((claim) =>
-        claim.id === claimId
-          ? {
-              ...claim,
-              status: "approved",
-              approvedBy: currentUser.id,
-              approvedAt: new Date().toISOString()
-            }
-          : claim
-      )
-    );
 
     const approvedClaim = claims.find((claim) => claim.id === claimId);
     if (!approvedClaim) return;
@@ -494,18 +561,32 @@ useEffect(() => {
     const task = tasks.find((item) => item.id === approvedClaim.taskId);
     if (!task) return;
 
+    const approvedAt = new Date().toISOString();
+
+    try {
+      await updateDoc(doc(db, "taskClaims", claimId), {
+        status: "approved",
+        approvedBy: currentUser.id,
+        approvedAt
+      });
+    } catch {
+      toast.error("No se pudo aprobar la tarea");
+      return;
+    }
+
     setProgressByUser((prev) => {
       const currentProgress = prev[approvedClaim.userId] ?? initialProgress;
       const nextXP = currentProgress.xp + task.xp;
       const nextPoints = currentProgress.points + task.points;
 
-      const approvedTodayCount = claims.filter(
-        (claim) =>
-          claim.userId === approvedClaim.userId &&
-          claim.status === "approved" &&
-          claim.approvedAt &&
-          new Date(claim.approvedAt).toDateString() === todayKey
-      ).length + 1;
+      const approvedTodayCount =
+        claims.filter(
+          (claim) =>
+            claim.userId === approvedClaim.userId &&
+            claim.status === "approved" &&
+            claim.approvedAt &&
+            new Date(claim.approvedAt).toDateString() === todayKey
+        ).length + 1;
 
       const shouldApplyBonus =
         approvedTodayCount >= DAILY_GOAL &&
@@ -517,53 +598,78 @@ useEffect(() => {
           ...currentProgress,
           xp: nextXP + (shouldApplyBonus ? BONUS_POINTS : 0),
           points: nextPoints + (shouldApplyBonus ? BONUS_POINTS : 0),
-          bonusAwardedOn: shouldApplyBonus ? todayKey : currentProgress.bonusAwardedOn
+          bonusAwardedOn: shouldApplyBonus
+            ? todayKey
+            : currentProgress.bonusAwardedOn
         }
       };
     });
   };
 
-  const handleRejectClaim = (claimId: string, note: string) => {
+  const handleRejectClaim = async (claimId: string, note: string) => {
     if (!currentUser) return;
-    setClaims((prev) =>
-      prev.map((claim) =>
-        claim.id === claimId
-          ? {
-              ...claim,
-              status: "rejected",
-              rejectionNote: note.trim() ? note.trim() : undefined
-            }
-          : claim
-      )
-    );
+
+    try {
+      await updateDoc(doc(db, "taskClaims", claimId), {
+        status: "rejected",
+        rejectionNote: note.trim()
+      });
+    } catch {
+      toast.error("No se pudo rechazar la tarea");
+    }
   };
 
-  const handleCreateTask = (task: Omit<Task, "id">) => {
-    setTasks((prev) => [
-      ...prev,
-      {
-        ...task,
-        id: `task-${Date.now()}`
-      }
-    ]);
+  const handleCreateTask = async (task: Omit<Task, "id">) => {
+    try {
+      await addDoc(collection(db, "tasks"), task);
+    } catch {
+      toast.error("No se pudo crear la tarea");
+    }
   };
 
-  const handleUpdateTask = (taskId: string, updates: Partial<Task>) => {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === taskId ? { ...task, ...updates } : task))
-    );
+  const handleUpdateTask = async (
+    taskId: string,
+    updates: Partial<Task>
+  ) => {
+    try {
+      await updateDoc(doc(db, "tasks", taskId), updates);
+    } catch {
+      toast.error("No se pudo actualizar la tarea");
+    }
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== taskId));
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await deleteDoc(doc(db, "tasks", taskId));
+    } catch {
+      toast.error("No se pudo eliminar la tarea");
+    }
   };
 
-  const handleResetProgress = () => {
-    setClaims([]);
-    setProgressByUser((prev) => ({
-      ...prev,
-      "user-1": initialProgress
-    }));
+  const handleResetProgress = async () => {
+    try {
+      await Promise.all(
+        claims.map((claim) =>
+          deleteDoc(doc(db, "taskClaims", claim.id))
+        )
+      );
+
+      const affectedUserIds = [
+        ...new Set(claims.map((claim) => claim.userId))
+      ];
+
+      setProgressByUser((prev) => {
+        const nextProgress = { ...prev };
+
+        affectedUserIds.forEach((userId) => {
+          nextProgress[userId] = { ...initialProgress };
+        });
+
+        return nextProgress;
+      });
+    } catch {
+      toast.error("No se pudo resetear el progreso");
+    }
   };
 
   const handleUpdateProfileName = (name: string) => {
@@ -644,6 +750,7 @@ useEffect(() => {
   if (currentUser.role === "admin") {
     return (
       <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
+        <Toaster position="top-center" richColors />
         <div className="pb-20 max-w-md mx-auto bg-[#E2DADB] min-h-screen relative shadow-2xl overflow-hidden">
           <Tasks
             currentUser={currentUser}
@@ -672,6 +779,7 @@ useEffect(() => {
 
   return (
     <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
+      <Toaster position="top-center" richColors />
       {scanPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
           <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl">
