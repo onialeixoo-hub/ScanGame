@@ -104,8 +104,6 @@ export function Tasks({
     type: "approve" | "reject" | "reset";
     claim?: TaskClaim;
   } | null>(null);
-  const [adminPin, setAdminPin] = useState("");
-  const [adminError, setAdminError] = useState("");
   const [rejectionNote, setRejectionNote] = useState("");
   const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [taskFormMode, setTaskFormMode] = useState<"create" | "edit">("create");
@@ -171,11 +169,6 @@ export function Tasks({
   };
 
   const handleAdminConfirm = () => {
-    if (adminPin !== currentUser.pin) {
-      setAdminError("Contraseña incorrecta");
-      return;
-    }
-
     if (adminAction?.type === "approve" && adminAction.claim) {
       onApproveClaim(adminAction.claim.id);
     }
@@ -189,8 +182,6 @@ export function Tasks({
     }
 
     setAdminAction(null);
-    setAdminPin("");
-    setAdminError("");
     setRejectionNote("");
   };
 
@@ -454,8 +445,6 @@ export function Tasks({
                         className="bg-emerald-500 hover:bg-emerald-600 text-white"
                         onClick={() => {
                           setAdminAction({ type: "approve", claim });
-                          setAdminPin("");
-                          setAdminError("");
                         }}
                       >
                         Aprobar
@@ -465,8 +454,6 @@ export function Tasks({
                         className="border-red-300 text-red-600"
                         onClick={() => {
                           setAdminAction({ type: "reject", claim });
-                          setAdminPin("");
-                          setAdminError("");
                         }}
                       >
                         Rechazar
@@ -598,8 +585,6 @@ export function Tasks({
                 className="mt-6 w-full"
                 onClick={() => {
                   setAdminAction({ type: "reset" });
-                  setAdminPin("");
-                  setAdminError("");
                 }}
               >
                 Resetear progreso
@@ -661,17 +646,14 @@ export function Tasks({
                   Confirmar acción
                 </h3>
               </div>
-           <p className="text-sm text-[#386FA4] mb-3">
-  Ingresá tu contraseña para continuar.
-</p>
-<Input
-  type="password"
-  value={adminPin}
-  onChange={(event) => setAdminPin(event.target.value)}
-  autoComplete="current-password"
-  placeholder="Contraseña"
-  className="mb-3"
-/>
+              <p className="text-sm text-[#386FA4] mb-3">
+                {adminAction.type === "approve" &&
+                  "¿Confirmás que querés aprobar esta tarea?"}
+                {adminAction.type === "reject" &&
+                  "¿Confirmás que querés rechazar esta tarea?"}
+                {adminAction.type === "reset" &&
+                  "Esta acción eliminará las solicitudes y reiniciará el progreso. ¿Continuar?"}
+              </p>
               {adminAction.type === "reject" && (
                 <Textarea
                   value={rejectionNote}
@@ -680,19 +662,12 @@ export function Tasks({
                   className="mb-3"
                 />
               )}
-              {adminError && (
-                <p className="text-sm text-red-500 font-semibold mb-2">
-                  {adminError}
-                </p>
-              )}
               <div className="flex gap-3">
                 <Button
                   variant="secondary"
                   onClick={() => {
                     setAdminAction(null);
-                    setAdminPin("");
-                    setAdminError("");
-                    setRejectionNote("");
+                        setRejectionNote("");
                   }}
                 >
                   Cancelar
