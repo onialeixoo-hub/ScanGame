@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Toaster, toast } from "sonner";
 import { BottomNav } from "./components/BottomNav";
 import { Collection } from "./components/Collection";
@@ -15,13 +16,14 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   query,
   setDoc,
   updateDoc,
   where
 } from "firebase/firestore";
-import { db } from "@/firebase";
+import { auth, db } from "@/firebase";
 import type {
   AppCategory,
   CollectedProduct,
@@ -116,6 +118,7 @@ const TASKS_STORAGE_KEY = "scanGame.tasks";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [claims, setClaims] = useState<TaskClaim[]>([]);
@@ -177,6 +180,65 @@ export default function App() {
   const todayKey = useMemo(() => new Date().toDateString(), []);
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setCurrentUser(null);
+        setAuthLoading(false);
+        return;
+      }
+
+      try {
+        const profileSnapshot = await getDoc(
+          doc(db, "users", firebaseUser.uid)
+        );
+
+        if (!profileSnapshot.exists()) {
+          await signOut(auth);
+          setCurrentUser(null);
+          return;
+        }
+
+        const profile = profileSnapshot.data() as {
+          name?: string;
+          email?: string;
+          role?: "admin" | "user";
+        };
+
+        if (profile.role !== "admin" && profile.role !== "user") {
+          await signOut(auth);
+          setCurrentUser(null);
+          return;
+        }
+
+        const restoredUser: User = {
+          id: firebaseUser.uid,
+          name: profile.name ?? "Usuario",
+          username: firebaseUser.email ?? profile.email ?? "",
+          pin: "",
+          role: profile.role,
+          avatar: profile.role === "admin" ? avatarHeadset : avatarHoodie
+        };
+
+        setCurrentUser(restoredUser);
+        setUsers((previousUsers) => {
+          const remainingUsers = previousUsers.filter(
+            (user) => user.id !== restoredUser.id
+          );
+
+          return [...remainingUsers, restoredUser];
+        });
+      } catch {
+        await signOut(auth).catch(() => undefined);
+        setCurrentUser(null);
+      } finally {
+        setAuthLoading(false);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify(collectionByUser));
   }, [collectionByUser]);
 
@@ -185,7 +247,15 @@ export default function App() {
   }, [progressByUser]);
 
   useEffect(() => {
-    if (!currentUser) {
+    if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#E2DADB] flex items-center justify-center">
+        <p className="text-[#386FA4] font-semibold">Cargando ScanGame...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
       setTasks([]);
       setClaims([]);
       tasksSeededRef.current = false;
@@ -690,6 +760,20 @@ export default function App() {
     );
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch {
+      toast.error("No se pudo cerrar la sesión");
+    } finally {
+      setCurrentUser(null);
+      setActiveTab("home");
+      setShowScanner(false);
+      setScannedProduct(null);
+      setSelectedProduct(null);
+    }
+  };
+
   const getLevelInfo = (xp: number) => {
     let level = 1;
     let threshold = 1000;
@@ -854,7 +938,7 @@ export default function App() {
               onCollectionClick={() => setActiveTab("collection")}
               onTasksClick={() => setActiveTab("tasks")}
               onCompleteTask={() => setActiveTab("tasks")}
-              onLogout={() => setCurrentUser(null)}
+              onLogout={() => void handleLogout()}
               onUpdateProfileName={handleUpdateProfileName}
               onUpdateAvatar={handleUpdateAvatar}
             />
