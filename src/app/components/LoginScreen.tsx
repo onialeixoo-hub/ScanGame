@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Lock, Mail } from "lucide-react";
+import { Lock, UserRound } from "lucide-react";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
@@ -21,15 +21,28 @@ interface FirebaseUserProfile {
   role?: "admin" | "user";
 }
 
+const USER_EMAILS: Record<string, string> = {
+  marti: "onitaaleixo@yahoo.com",
+  ona: "onialeixoo@gmail.com"
+};
+
 export function LoginScreen({ users, onLogin }: LoginScreenProps) {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!email.trim() || !password) {
-      setError("Completá el correo y la contraseña");
+    const normalizedUsername = username.trim().toLowerCase();
+    const email = USER_EMAILS[normalizedUsername];
+
+    if (!normalizedUsername || !password) {
+      setError("Completá el usuario y la contraseña");
+      return;
+    }
+
+    if (!email) {
+      setError("El usuario no existe");
       return;
     }
 
@@ -39,7 +52,7 @@ export function LoginScreen({ users, onLogin }: LoginScreenProps) {
     try {
       const credential = await signInWithEmailAndPassword(
         auth,
-        email.trim(),
+        email,
         password
       );
 
@@ -73,8 +86,7 @@ export function LoginScreen({ users, onLogin }: LoginScreenProps) {
       const loggedUser: User = {
         id: credential.user.uid,
         name: profile.name ?? "Usuario",
-        username:
-          credential.user.email ?? email.trim(),
+        username: normalizedUsername,
         pin: "",
         role: profile.role,
         avatar: previousUserWithSameRole?.avatar ?? ""
@@ -83,7 +95,7 @@ export function LoginScreen({ users, onLogin }: LoginScreenProps) {
       onLogin(loggedUser);
     } catch {
       await signOut(auth).catch(() => undefined);
-      setError("Correo o contraseña incorrectos");
+      setError("Usuario o contraseña incorrectos");
     } finally {
       setIsLoading(false);
     }
@@ -106,27 +118,29 @@ export function LoginScreen({ users, onLogin }: LoginScreenProps) {
           </h1>
 
           <p className="text-sm text-[#386FA4]">
-            Ingresá con tu cuenta
+            Ingresá con tu usuario
           </p>
         </div>
 
         <div className="space-y-4">
           <div>
             <label className="text-sm font-semibold text-[#386FA4] mb-1 block">
-              Correo electrónico
+              Usuario
             </label>
 
             <div className="relative">
-              <Mail className="w-4 h-4 text-[#386FA4] absolute left-3 top-3" />
+              <UserRound className="w-4 h-4 text-[#386FA4] absolute left-3 top-3" />
 
               <Input
-                type="email"
-                value={email}
+                type="text"
+                value={username}
                 onChange={(event) =>
-                  setEmail(event.target.value)
+                  setUsername(event.target.value)
                 }
-                placeholder="tunombre@email.com"
-                autoComplete="email"
+                placeholder="ona o marti"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
                 className="pl-9 border-2 border-[#386FA4]/30 focus:border-[#386FA4]"
               />
             </div>
