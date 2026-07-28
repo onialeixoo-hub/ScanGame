@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
+import { Menu } from "lucide-react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Toaster, toast } from "sonner";
+import { AccountMenu } from "./components/AccountMenu";
 import { BottomNav } from "./components/BottomNav";
 import { Collection } from "./components/Collection";
 import { Home } from "./components/Home";
@@ -119,6 +121,7 @@ const TASKS_STORAGE_KEY = "scanGame.tasks";
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [claims, setClaims] = useState<TaskClaim[]>([]);
@@ -758,6 +761,7 @@ export default function App() {
     } catch {
       toast.error("No se pudo cerrar la sesión");
     } finally {
+      setShowAccountMenu(false);
       setCurrentUser(null);
       setActiveTab("home");
       setShowScanner(false);
@@ -835,6 +839,29 @@ export default function App() {
     return (
       <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
         <Toaster position="top-center" richColors />
+
+        <Button
+          type="button"
+          size="icon"
+          aria-label="Abrir menú de cuenta"
+          onClick={() => setShowAccountMenu(true)}
+          className="fixed bottom-6 right-5 z-[60] h-14 w-14 rounded-full bg-[#386FA4] text-white shadow-2xl hover:bg-[#2d5a85]"
+        >
+          <Menu className="h-6 w-6" />
+        </Button>
+
+        <AccountMenu
+          open={showAccountMenu}
+          user={currentUser}
+          progress={activeProgress}
+          productsCount={userCollection.length}
+          categoriesCount={
+            new Set(userCollection.map((product) => product.appCategory)).size
+          }
+          onClose={() => setShowAccountMenu(false)}
+          onLogout={() => void handleLogout()}
+        />
+
         <div className="pb-20 max-w-md mx-auto bg-[#E2DADB] min-h-screen relative shadow-2xl overflow-hidden">
           <Tasks
             currentUser={currentUser}
@@ -864,6 +891,35 @@ export default function App() {
   return (
     <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
       <Toaster position="top-center" richColors />
+
+      {activeTab !== "home" &&
+        !showScanner &&
+        !scannedProduct &&
+        !selectedProduct &&
+        !isFetchingProduct && (
+          <Button
+            type="button"
+            size="icon"
+            aria-label="Abrir menú de cuenta"
+            onClick={() => setShowAccountMenu(true)}
+            className="fixed bottom-24 right-5 z-[60] h-14 w-14 rounded-full bg-[#386FA4] text-white shadow-2xl hover:bg-[#2d5a85]"
+          >
+            <Menu className="h-6 w-6" />
+          </Button>
+        )}
+
+      <AccountMenu
+        open={showAccountMenu}
+        user={currentUser}
+        progress={activeProgress}
+        productsCount={userCollection.length}
+        categoriesCount={
+          new Set(userCollection.map((product) => product.appCategory)).size
+        }
+        onClose={() => setShowAccountMenu(false)}
+        onLogout={() => void handleLogout()}
+      />
+
       {scanPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
           <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl">
