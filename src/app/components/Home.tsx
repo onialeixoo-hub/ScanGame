@@ -375,7 +375,7 @@ export function Home({
       <AnimatePresence>
         {showProfileMenu && (
           <motion.div
-            className="fixed inset-0 z-50 flex"
+            className="fixed inset-0 z-[100] flex"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -387,7 +387,7 @@ export function Home({
             />
 
             <motion.aside
-              className="flex h-full w-[84%] max-w-xs flex-col bg-gradient-to-b from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-2xl"
+              className="flex h-full w-[84%] max-w-xs flex-col bg-gradient-to-b from-[#386FA4] to-[#2d5a85] p-5 pb-24 text-white shadow-2xl"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
@@ -474,7 +474,7 @@ export function Home({
       <AnimatePresence>
         {showNameModal && (
           <motion.div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 px-6"
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 px-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -519,7 +519,7 @@ export function Home({
       <AnimatePresence>
         {showAvatarModal && (
           <motion.div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 px-6"
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 px-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
