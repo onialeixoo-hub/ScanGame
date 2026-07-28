@@ -116,6 +116,11 @@ const COLLECTION_STORAGE_KEY = "scanGame.collection";
 const PROGRESS_STORAGE_KEY = "scanGame.progress";
 const TASKS_STORAGE_KEY = "scanGame.tasks";
 
+const cleanFirestoreData = (value: Record<string, unknown>) =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined)
+  );
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -128,17 +133,10 @@ export default function App() {
     Record<string, UserProgress>
   >({});
   const progressSeededRef = useRef<Set<string>>(new Set());
+  const collectionSeededRef = useRef<Set<string>>(new Set());
   const [collectionByUser, setCollectionByUser] = useState<
     Record<string, CollectedProduct[]>
-  >(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      const stored = localStorage.getItem(COLLECTION_STORAGE_KEY);
-      return stored ? (JSON.parse(stored) as Record<string, CollectedProduct[]>) : {};
-    } catch (error) {
-      return {};
-    }
-  });
+  >({});
   const [activeTab, setActiveTab] = useState<"home" | "collection" | "tasks">("home");
   const [showScanner, setShowScanner] = useState(false);
   const [scanPopup, setScanPopup] = useState<{
@@ -228,10 +226,6 @@ export default function App() {
 
     return unsubscribe;
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify(collectionByUser));
-  }, [collectionByUser]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -459,6 +453,122 @@ export default function App() {
     );
   }, [currentUser, users]);
 
+  useEffect(() => {
+    if (!currentUser) {
+      setCollectionByUser({});
+      return;
+    }
+
+    const collectionOwner =
+      currentUser.role === "admin"
+        ? users.find(
+            (user) => user.role === "user" && user.id !== "user-1"
+          )
+        : currentUser;
+
+    if (!collectionOwner || collectionOwner.role !== "user") {
+      setCollectionByUser({});
+      return;
+    }
+
+    const ownerId = collectionOwner.id;
+    const productsReference = collection(
+      db,
+      "users",
+      ownerId,
+      "products"
+    );
+
+    return onSnapshot(
+      productsReference,
+      (snapshot) => {
+        const remoteProducts = snapshot.docs
+          .map((productDocument) => {
+            const productData =
+              productDocument.data() as CollectedProduct;
+
+            return {
+              ...productData,
+              barcode:
+                productData.barcode ??
+                decodeURIComponent(productDocument.id)
+            };
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.lastScannedAt).getTime() -
+              new Date(a.lastScannedAt).getTime()
+          );
+
+        setCollectionByUser((previousCollections) => ({
+          ...previousCollections,
+          [ownerId]: remoteProducts
+        }));
+
+        const canMigrateLegacyCollection =
+          snapshot.empty &&
+          currentUser.role === "user" &&
+          currentUser.id === ownerId &&
+          !collectionSeededRef.current.has(ownerId);
+
+        if (!canMigrateLegacyCollection) return;
+
+        collectionSeededRef.current.add(ownerId);
+
+        let legacyProducts: CollectedProduct[] = [];
+
+        try {
+          const storedCollection = localStorage.getItem(
+            COLLECTION_STORAGE_KEY
+          );
+
+          if (storedCollection) {
+            const parsedCollection = JSON.parse(
+              storedCollection
+            ) as Record<string, CollectedProduct[]>;
+
+            legacyProducts =
+              parsedCollection[ownerId] ??
+              parsedCollection["user-1"] ??
+              [];
+          }
+        } catch {
+          legacyProducts = [];
+        }
+
+        if (legacyProducts.length === 0) return;
+
+        void Promise.all(
+          legacyProducts.map((product) =>
+            setDoc(
+              doc(
+                db,
+                "users",
+                ownerId,
+                "products",
+                encodeURIComponent(product.barcode)
+              ),
+              cleanFirestoreData(
+                product as unknown as Record<string, unknown>
+              )
+            )
+          )
+        )
+          .then(() => {
+            localStorage.removeItem(COLLECTION_STORAGE_KEY);
+            toast.success("Colección migrada a Firebase");
+          })
+          .catch(() => {
+            collectionSeededRef.current.delete(ownerId);
+            toast.error("No se pudo migrar la colección a Firebase");
+          });
+      },
+      () => {
+        toast.error("No se pudo cargar la colección");
+      }
+    );
+  }, [currentUser, users]);
+
   const isSameDay = (dateValue: string | undefined) => {
     if (!dateValue) return false;
     return new Date(dateValue).toDateString() === todayKey;
@@ -581,116 +691,181 @@ export default function App() {
   const handleAddToCollection = async () => {
     if (!currentUser || !scannedProduct) return;
 
-    const userCollection = collectionByUser[currentUser.id] ?? [];
-    const existingProduct = userCollection.find(
-      (item) => item.barcode === scannedProduct.barcode
-    );
-    if (existingProduct && isSameDay(existingProduct.lastScannedAt)) {
-      return;
-    }
-
     const now = new Date().toISOString();
-    const updatedProduct: CollectedProduct = existingProduct
-      ? {
-          ...existingProduct,
-          name: scannedProduct.name,
-          brand: scannedProduct.brand,
-          imageUrl: scannedProduct.imageUrl,
-          offCategoriesRaw: scannedProduct.offCategoriesRaw,
-          appCategory: scannedProduct.appCategory,
-          rarity: scannedProduct.rarity,
-          lastScannedAt: now,
-          scanCount: existingProduct.scanCount + 1,
-          ingredients: scannedProduct.ingredients,
-          allergens: scannedProduct.allergens
-        }
-      : {
-          barcode: scannedProduct.barcode,
-          name: scannedProduct.name,
-          brand: scannedProduct.brand,
-          imageUrl: scannedProduct.imageUrl,
-          offCategoriesRaw: scannedProduct.offCategoriesRaw,
-          appCategory: scannedProduct.appCategory,
-          rarity: scannedProduct.rarity,
-          dateFirstScanned: now,
-          lastScannedAt: now,
-          scanCount: 1,
-          ingredients: scannedProduct.ingredients,
-          allergens: scannedProduct.allergens
-        };
-
-    const nextCollection = existingProduct
-      ? userCollection.map((item) =>
-          item.barcode === updatedProduct.barcode ? updatedProduct : item
-        )
-      : [updatedProduct, ...userCollection];
-
-    setCollectionByUser((prev) => ({
-      ...prev,
-      [currentUser.id]: nextCollection
-    }));
-
-    const currentProgress = progressByUser[currentUser.id] ?? initialProgress;
-    const nextStreak = getNextScanStreak(currentProgress);
-    const isFirstScanToday = !isSameDay(currentProgress.lastScanDate);
-    const nextProgress: UserProgress = {
-      ...currentProgress,
-      xp: currentProgress.xp + scannedProduct.xpReward,
-      scanStreak: isFirstScanToday
-        ? nextStreak
-        : currentProgress.scanStreak,
-      lastScanDate: isFirstScanToday
-        ? now
-        : currentProgress.lastScanDate
-    };
-
-    setProgressByUser((prev) => ({
-      ...prev,
-      [currentUser.id]: nextProgress
-    }));
+    const productReference = doc(
+      db,
+      "users",
+      currentUser.id,
+      "products",
+      encodeURIComponent(scannedProduct.barcode)
+    );
+    const scanReference = doc(
+      collection(db, "users", currentUser.id, "scans")
+    );
+    const progressReference = doc(
+      db,
+      "userProgress",
+      currentUser.id
+    );
 
     try {
-      await setDoc(
-        doc(db, "userProgress", currentUser.id),
-        nextProgress,
-        { merge: true }
+      const scanResult = await runTransaction(
+        db,
+        async (transaction) => {
+          const productSnapshot = await transaction.get(
+            productReference
+          );
+          const progressSnapshot = await transaction.get(
+            progressReference
+          );
+
+          const existingProduct = productSnapshot.exists()
+            ? (productSnapshot.data() as CollectedProduct)
+            : undefined;
+
+          const duplicateToday = existingProduct
+            ? isSameDay(existingProduct.lastScannedAt)
+            : false;
+          const xpReward = duplicateToday
+            ? 0
+            : scannedProduct.xpReward;
+
+          transaction.set(
+            scanReference,
+            cleanFirestoreData({
+              barcode: scannedProduct.barcode,
+              name: scannedProduct.name,
+              brand: scannedProduct.brand,
+              imageUrl: scannedProduct.imageUrl,
+              appCategory: scannedProduct.appCategory,
+              rarity: scannedProduct.rarity,
+              scannedAt: now,
+              xpReward,
+              duplicateToday,
+              isNew: !existingProduct
+            })
+          );
+
+          if (duplicateToday) {
+            return { duplicateToday: true, xpReward: 0 };
+          }
+
+          const updatedProduct: CollectedProduct = existingProduct
+            ? {
+                ...existingProduct,
+                name: scannedProduct.name,
+                brand: scannedProduct.brand,
+                imageUrl: scannedProduct.imageUrl,
+                offCategoriesRaw:
+                  scannedProduct.offCategoriesRaw,
+                appCategory: scannedProduct.appCategory,
+                rarity: scannedProduct.rarity,
+                lastScannedAt: now,
+                scanCount: existingProduct.scanCount + 1,
+                ingredients: scannedProduct.ingredients,
+                allergens: scannedProduct.allergens
+              }
+            : {
+                barcode: scannedProduct.barcode,
+                name: scannedProduct.name,
+                brand: scannedProduct.brand,
+                imageUrl: scannedProduct.imageUrl,
+                offCategoriesRaw:
+                  scannedProduct.offCategoriesRaw,
+                appCategory: scannedProduct.appCategory,
+                rarity: scannedProduct.rarity,
+                dateFirstScanned: now,
+                lastScannedAt: now,
+                scanCount: 1,
+                ingredients: scannedProduct.ingredients,
+                allergens: scannedProduct.allergens
+              };
+
+          const currentProgress = progressSnapshot.exists()
+            ? {
+                ...initialProgress,
+                ...(progressSnapshot.data() as UserProgress)
+              }
+            : progressByUser[currentUser.id] ?? initialProgress;
+
+          const isFirstScanToday = !isSameDay(
+            currentProgress.lastScanDate
+          );
+          const nextScanStreak = getNextScanStreak(
+            currentProgress
+          );
+          const nextProgress: UserProgress = {
+            ...currentProgress,
+            xp: currentProgress.xp + xpReward,
+            scanStreak: isFirstScanToday
+              ? nextScanStreak
+              : currentProgress.scanStreak,
+            lastScanDate: isFirstScanToday
+              ? now
+              : currentProgress.lastScanDate
+          };
+
+          transaction.set(
+            productReference,
+            cleanFirestoreData(
+              updatedProduct as unknown as Record<
+                string,
+                unknown
+              >
+            )
+          );
+          transaction.set(
+            progressReference,
+            cleanFirestoreData(
+              nextProgress as unknown as Record<
+                string,
+                unknown
+              >
+            ),
+            { merge: true }
+          );
+
+          return { duplicateToday: false, xpReward };
+        }
       );
+
+      const baseReward = Math.max(
+        scanResult.xpReward -
+          scannedProduct.bonusDaily -
+          scannedProduct.bonusStreak,
+        0
+      );
+      const rewardLines = [
+        baseReward > 0 ? `Base: +${baseReward} XP` : null,
+        scannedProduct.bonusDaily > 0
+          ? `Bonus primer producto del día: +${scannedProduct.bonusDaily} XP`
+          : null,
+        scannedProduct.bonusStreak > 0
+          ? `Bonus racha: +${scannedProduct.bonusStreak} XP`
+          : null
+      ].filter(Boolean) as string[];
+
+      if (scanResult.duplicateToday) {
+        setScanPopup({
+          title: "Ya escaneaste este producto hoy",
+          message: "El escaneo quedó registrado sin sumar XP.",
+          details: ["Escaneo repetido en el día: 0 XP"],
+          ctaLabel: "Entendido"
+        });
+      } else {
+        setScanPopup({
+          title: "¡Felicitaciones!",
+          message: `Ganaste ${scanResult.xpReward} XP por el escaneo.`,
+          details: rewardLines,
+          ctaLabel: "Seguir jugando"
+        });
+      }
+
+      setScannedProduct(null);
+      setActiveTab("collection");
     } catch {
-      toast.error("No se pudo guardar el progreso del escaneo");
+      toast.error("No se pudo guardar el producto en Firebase");
     }
-
-    const baseReward = Math.max(
-      scannedProduct.xpReward - scannedProduct.bonusDaily - scannedProduct.bonusStreak,
-      0
-    );
-    const rewardLines = [
-      baseReward > 0 ? `Base: +${baseReward} XP` : null,
-      scannedProduct.bonusDaily > 0
-        ? `Bonus primer producto del día: +${scannedProduct.bonusDaily} XP`
-        : null,
-      scannedProduct.bonusStreak > 0
-        ? `Bonus racha: +${scannedProduct.bonusStreak} XP`
-        : null
-    ].filter(Boolean) as string[];
-
-    if (scannedProduct.xpReward === 0) {
-      setScanPopup({
-        title: "Ya escaneaste este producto hoy",
-        message: "Volvé mañana para ganar puntos extra.",
-        details: ["Escaneo repetido en el día: 0 XP"],
-        ctaLabel: "Entendido"
-      });
-    } else {
-      setScanPopup({
-        title: "¡Felicitaciones!",
-        message: `Ganaste ${scannedProduct.xpReward} XP por el escaneo.`,
-        details: rewardLines,
-        ctaLabel: "Seguir jugando"
-      });
-    }
-
-    setScannedProduct(null);
-    setActiveTab("collection");
   };
 
   const handleRescan = () => {
