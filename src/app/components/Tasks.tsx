@@ -186,6 +186,17 @@ export function Tasks({
 
   const latestRejectedClaim = rejectedClaims[0];
 
+  const latestRejectionDate = latestRejectedClaim
+    ? latestRejectedClaim.rejectedAt ??
+      latestRejectedClaim.timestamp
+    : undefined;
+
+  const hasUnseenRejection =
+    Boolean(latestRejectedClaim && latestRejectionDate) &&
+    (!progress.lastSeenRejectionAt ||
+      new Date(latestRejectionDate as string).getTime() >
+        new Date(progress.lastSeenRejectionAt).getTime());
+
   const latestRejectedTask = latestRejectedClaim
     ? tasks.find((task) => task.id === latestRejectedClaim.taskId)
     : undefined;
@@ -326,7 +337,7 @@ export function Tasks({
       </div>
 
       <div className="px-6 pt-6 space-y-6">
-        {!isAdmin && latestRejectedClaim && (
+        {!isAdmin && latestRejectedClaim && hasUnseenRejection && (
           <Card className="border-2 border-red-200 bg-red-50 p-4">
             <div className="flex items-start gap-3">
               <div className="rounded-full bg-red-100 p-2">
@@ -348,12 +359,12 @@ export function Tasks({
                 <p className="mt-1 text-xs text-red-500">
                   Registrado el{" "}
                   {formatDate(
-                    latestRejectedClaim.approvedAt ??
+                    latestRejectedClaim.rejectedAt ??
                       latestRejectedClaim.timestamp
                   )}{" "}
                   a las{" "}
                   {formatTime(
-                    latestRejectedClaim.approvedAt ??
+                    latestRejectedClaim.rejectedAt ??
                       latestRejectedClaim.timestamp
                   )}
                 </p>
@@ -971,9 +982,21 @@ export function Tasks({
                           {task?.title ?? "Tarea"}
                         </p>
                         <span className="text-right text-xs text-[#386FA4]">
-                          {formatDate(claim.approvedAt ?? claim.timestamp)}
+                          {formatDate(
+                            claim.status === "approved"
+                              ? claim.approvedAt ?? claim.timestamp
+                              : claim.status === "rejected"
+                                ? claim.rejectedAt ?? claim.timestamp
+                                : claim.timestamp
+                          )}
                           <br />
-                          {formatTime(claim.approvedAt ?? claim.timestamp)}
+                          {formatTime(
+                            claim.status === "approved"
+                              ? claim.approvedAt ?? claim.timestamp
+                              : claim.status === "rejected"
+                                ? claim.rejectedAt ?? claim.timestamp
+                                : claim.timestamp
+                          )}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mt-2">
