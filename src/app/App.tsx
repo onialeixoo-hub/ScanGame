@@ -805,10 +805,45 @@ export default function App() {
     try {
       await updateDoc(doc(db, "taskClaims", claimId), {
         status: "rejected",
-        rejectionNote: note.trim()
+        rejectionNote: note.trim(),
+        rejectedAt: new Date().toISOString()
       });
     } catch {
       toast.error("No se pudo rechazar la tarea");
+    }
+  };
+
+  const handleMarkRejectionSeen = async (
+    claim: TaskClaim
+  ) => {
+    if (!currentUser || currentUser.role !== "user") return;
+
+    const rejectionDate =
+      claim.rejectedAt ?? claim.timestamp;
+
+    const currentProgress =
+      progressByUser[currentUser.id] ?? initialProgress;
+
+    const nextProgress: UserProgress = {
+      ...currentProgress,
+      lastSeenRejectionAt: rejectionDate
+    };
+
+    setProgressByUser((previousProgress) => ({
+      ...previousProgress,
+      [currentUser.id]: nextProgress
+    }));
+
+    try {
+      await setDoc(
+        doc(db, "userProgress", currentUser.id),
+        {
+          lastSeenRejectionAt: rejectionDate
+        },
+        { merge: true }
+      );
+    } catch {
+      toast.error("No se pudo marcar la notificación como vista");
     }
   };
 
@@ -988,6 +1023,38 @@ export default function App() {
     };
   });
 
+  const latestRejectedClaim =
+    currentUser?.role === "user"
+      ? claims
+          .filter(
+            (claim) =>
+              claim.userId === currentUser.id &&
+              claim.status === "rejected"
+          )
+          .sort(
+            (a, b) =>
+              new Date(b.rejectedAt ?? b.timestamp).getTime() -
+              new Date(a.rejectedAt ?? a.timestamp).getTime()
+          )[0]
+      : undefined;
+
+  const latestRejectionDate = latestRejectedClaim
+    ? latestRejectedClaim.rejectedAt ??
+      latestRejectedClaim.timestamp
+    : undefined;
+
+  const hasUnseenRejection =
+    Boolean(latestRejectedClaim && latestRejectionDate) &&
+    (!activeProgress.lastSeenRejectionAt ||
+      new Date(latestRejectionDate as string).getTime() >
+        new Date(activeProgress.lastSeenRejectionAt).getTime());
+
+  const latestRejectedTask = latestRejectedClaim
+    ? tasks.find(
+        (task) => task.id === latestRejectedClaim.taskId
+      )
+    : undefined;
+
   const levelInfo = getLevelInfo(activeProgress.xp);
 
   if (authLoading) {
@@ -1086,6 +1153,67 @@ export default function App() {
         onClose={() => setShowAccountMenu(false)}
         onLogout={() => void handleLogout()}
       />
+
+      {hasUnseenRejection && latestRejectedClaim && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 px-6">
+          <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 py-7 text-center text-white">
+              <p className="text-2xl font-bold">
+                Tarea rechazada
+              </p>
+              <p className="mt-2 text-sm text-white/90">
+                Revisá el motivo antes de volver a enviarla.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-red-500">
+                  Tarea
+                </p>
+                <p className="mt-1 text-lg font-bold text-[#12130F]">
+                  {latestRejectedTask?.title ?? "Tarea"}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-red-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-red-500">
+                  Motivo
+                </p>
+                <p className="mt-1 text-sm text-red-700">
+                  {latestRejectedClaim.rejectionNote?.trim() ||
+                    "No se informó un motivo"}
+                </p>
+              </div>
+
+              <p className="text-xs text-[#386FA4]">
+                Rechazada el{" "}
+                {new Date(
+                  latestRejectedClaim.rejectedAt ??
+                    latestRejectedClaim.timestamp
+                ).toLocaleString("es-AR", {
+                  day: "2-digit",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit"
+                })}
+              </p>
+
+              <Button
+                type="button"
+                className="w-full bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
+                onClick={() =>
+                  void handleMarkRejectionSeen(
+                    latestRejectedClaim
+                  )
+                }
+              >
+                Entendido
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {scanPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
