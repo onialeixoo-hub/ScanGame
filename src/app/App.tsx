@@ -194,6 +194,7 @@ export default function App() {
         const profile = profileSnapshot.data() as {
           name?: string;
           email?: string;
+          avatar?: string;
           role?: "admin" | "user";
         };
 
@@ -209,7 +210,9 @@ export default function App() {
           username: firebaseUser.email ?? profile.email ?? "",
           pin: "",
           role: profile.role,
-          avatar: profile.role === "admin" ? avatarHeadset : avatarHoodie
+          avatar:
+            profile.avatar ??
+            (profile.role === "admin" ? avatarHeadset : avatarHoodie)
         };
 
         setCurrentUser(restoredUser);
@@ -258,6 +261,7 @@ export default function App() {
           const profile = userDocument.data() as {
             name?: string;
             email?: string;
+            avatar?: string;
             role?: "admin" | "user";
           };
 
@@ -269,11 +273,22 @@ export default function App() {
             username: profile.email ?? "",
             pin: "",
             role: profile.role,
-            avatar: profile.role === "admin" ? avatarHeadset : avatarHoodie
+            avatar:
+              profile.avatar ??
+              (profile.role === "admin" ? avatarHeadset : avatarHoodie)
           });
         });
 
         setUsers(remoteUsers);
+        setCurrentUser((previousUser) => {
+          if (!previousUser) return previousUser;
+
+          const updatedCurrentUser = remoteUsers.find(
+            (user) => user.id === previousUser.id
+          );
+
+          return updatedCurrentUser ?? previousUser;
+        });
       },
       () => {
         toast.error("No se pudieron cargar los usuarios");
@@ -857,22 +872,53 @@ export default function App() {
     }
   };
 
-  const handleUpdateProfileName = (name: string) => {
+  const handleUpdateProfileName = async (name: string) => {
     if (!currentUser) return;
-    setCurrentUser((prev) => (prev ? { ...prev, name } : prev));
-    setUsers((prev) =>
-      prev.map((user) => (user.id === currentUser.id ? { ...user, name } : user))
-    );
+
+    const cleanName = name.trim();
+    if (!cleanName) return;
+
+    try {
+      await updateDoc(doc(db, "users", currentUser.id), {
+        name: cleanName
+      });
+
+      setCurrentUser((previousUser) =>
+        previousUser ? { ...previousUser, name: cleanName } : previousUser
+      );
+      setUsers((previousUsers) =>
+        previousUsers.map((user) =>
+          user.id === currentUser.id
+            ? { ...user, name: cleanName }
+            : user
+        )
+      );
+    } catch {
+      toast.error("No se pudo guardar el nombre");
+    }
   };
 
-  const handleUpdateAvatar = (avatar: string) => {
+  const handleUpdateAvatar = async (avatar: string) => {
     if (!currentUser) return;
-    setCurrentUser((prev) => (prev ? { ...prev, avatar } : prev));
-    setUsers((prev) =>
-      prev.map((user) =>
-        user.id === currentUser.id ? { ...user, avatar } : user
-      )
-    );
+
+    try {
+      await updateDoc(doc(db, "users", currentUser.id), {
+        avatar
+      });
+
+      setCurrentUser((previousUser) =>
+        previousUser ? { ...previousUser, avatar } : previousUser
+      );
+      setUsers((previousUsers) =>
+        previousUsers.map((user) =>
+          user.id === currentUser.id
+            ? { ...user, avatar }
+            : user
+        )
+      );
+    } catch {
+      toast.error("No se pudo guardar el avatar");
+    }
   };
 
   const handleLogout = async () => {
