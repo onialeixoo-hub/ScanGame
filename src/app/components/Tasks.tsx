@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  Bell,
   CheckCircle2,
   Clock,
   Crown,
@@ -118,32 +119,87 @@ export function Tasks({
   });
 
   const todayKey = useMemo(() => new Date().toDateString(), []);
-  const currentUserClaims = useMemo(
-    () => claims.filter((claim) => claim.userId === currentUser.id),
-    [claims, currentUser.id]
+
+  const trackedUser = isAdmin
+    ? users.find((user) => user.role === "user" && user.id !== "user-1") ??
+      currentUser
+    : currentUser;
+
+  const trackedUserClaims = useMemo(
+    () =>
+      claims
+        .filter((claim) => claim.userId === trackedUser.id)
+        .sort(
+          (a, b) =>
+            new Date(b.approvedAt ?? b.timestamp).getTime() -
+            new Date(a.approvedAt ?? a.timestamp).getTime()
+        ),
+    [claims, trackedUser.id]
   );
+
   const pendingClaims = useMemo(
     () =>
       claims
         .filter((claim) => claim.status === "pending")
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+        .sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() -
+            new Date(a.timestamp).getTime()
+        ),
     [claims]
   );
 
-  const approvedToday = currentUserClaims.filter(
+  const startOfCurrentWeek = useMemo(() => {
+    const date = new Date();
+    const day = date.getDay();
+    const daysSinceMonday = day === 0 ? 6 : day - 1;
+
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - daysSinceMonday);
+
+    return date;
+  }, []);
+
+  const approvedClaims = trackedUserClaims.filter(
+    (claim) => claim.status === "approved"
+  );
+
+  const approvedToday = approvedClaims.filter(
     (claim) =>
-      claim.status === "approved" &&
       claim.approvedAt &&
       new Date(claim.approvedAt).toDateString() === todayKey
   );
 
-  const progressValue = Math.min((approvedToday.length / dailyGoal) * 100, 100);
+  const approvedThisWeek = approvedClaims.filter(
+    (claim) =>
+      claim.approvedAt &&
+      new Date(claim.approvedAt).getTime() >= startOfCurrentWeek.getTime()
+  );
+
+  const rejectedClaims = trackedUserClaims.filter(
+    (claim) => claim.status === "rejected"
+  );
+
+  const pendingUserClaims = trackedUserClaims.filter(
+    (claim) => claim.status === "pending"
+  );
+
+  const latestRejectedClaim = rejectedClaims[0];
+
+  const latestRejectedTask = latestRejectedClaim
+    ? tasks.find((task) => task.id === latestRejectedClaim.taskId)
+    : undefined;
+
+  const progressValue = Math.min(
+    (approvedToday.length / dailyGoal) * 100,
+    100
+  );
   const dailyBonusUnlocked = approvedToday.length >= dailyGoal;
 
   const activeTasks = tasks.filter((task) => task.active);
 
   const getLatestClaimForTask = (task: Task) => {
-    const relevantClaims = currentUserClaims.filter((claim) => {
+    const relevantClaims = trackedUserClaims.filter((claim) => {
       if (claim.taskId !== task.id) return false;
       if (task.frequency === "daily") {
         return new Date(claim.timestamp).toDateString() === todayKey;
@@ -270,6 +326,42 @@ export function Tasks({
       </div>
 
       <div className="px-6 pt-6 space-y-6">
+        {!isAdmin && latestRejectedClaim && (
+          <Card className="border-2 border-red-200 bg-red-50 p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-red-100 p-2">
+                <Bell className="h-5 w-5 text-red-600" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-red-700">
+                  Último rechazo
+                </p>
+                <p className="mt-1 font-bold text-[#12130F]">
+                  {latestRejectedTask?.title ?? "Tarea"}
+                </p>
+                <p className="mt-1 text-sm text-red-600">
+                  Motivo:{" "}
+                  {latestRejectedClaim.rejectionNote?.trim() ||
+                    "No se informó un motivo"}
+                </p>
+                <p className="mt-1 text-xs text-red-500">
+                  Registrado el{" "}
+                  {formatDate(
+                    latestRejectedClaim.approvedAt ??
+                      latestRejectedClaim.timestamp
+                  )}{" "}
+                  a las{" "}
+                  {formatTime(
+                    latestRejectedClaim.approvedAt ??
+                      latestRejectedClaim.timestamp
+                  )}
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {!isAdmin && (
           <Card className="p-4 bg-white/95 border-2 border-[#386FA4]/20">
             <div className="flex items-center justify-between mb-2">
@@ -291,6 +383,61 @@ export function Tasks({
                 ¡Bonus desbloqueado!
               </p>
             )}
+          </Card>
+        )}
+
+        {!isAdmin && (
+          <Card className="border-2 border-[#386FA4]/20 bg-white/95 p-4">
+            <h2 className="mb-3 text-base font-bold text-[#12130F]">
+              Resumen de tareas
+            </h2>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl bg-emerald-50 p-3">
+                <p className="text-xl font-bold text-emerald-700">
+                  {approvedToday.length}
+                </p>
+                <p className="text-[11px] font-semibold text-emerald-600">
+                  Hoy
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-blue-50 p-3">
+                <p className="text-xl font-bold text-blue-700">
+                  {approvedThisWeek.length}
+                </p>
+                <p className="text-[11px] font-semibold text-blue-600">
+                  Esta semana
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-purple-50 p-3">
+                <p className="text-xl font-bold text-purple-700">
+                  {approvedClaims.length}
+                </p>
+                <p className="text-[11px] font-semibold text-purple-600">
+                  Aprobadas
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-amber-50 p-3">
+                <p className="text-xl font-bold text-amber-700">
+                  {pendingUserClaims.length}
+                </p>
+                <p className="text-[11px] font-semibold text-amber-600">
+                  Pendientes
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-red-50 p-3">
+                <p className="text-xl font-bold text-red-700">
+                  {rejectedClaims.length}
+                </p>
+                <p className="text-[11px] font-semibold text-red-600">
+                  Rechazadas
+                </p>
+              </div>
+            </div>
           </Card>
         )}
 
@@ -550,33 +697,50 @@ export function Tasks({
                   <p className="text-xl font-bold text-[#12130F]">{progress.xp}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div>
-                  <p className="text-sm text-[#386FA4]">Puntos totales</p>
-                  <p className="text-lg font-bold text-[#12130F]">
-                    {progress.points}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-[#386FA4]">Racha diaria</p>
-                  <p className="text-lg font-bold text-[#12130F]">
-                    {progress.streak} días
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-[#386FA4]">Aprobadas hoy</p>
-                  <p className="text-lg font-bold text-[#12130F]">
+              <p className="mt-4 text-sm font-semibold text-[#386FA4]">
+                Estadísticas de {trackedUser.name}
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-emerald-50 p-3">
+                  <p className="text-xs text-emerald-600">Aprobadas hoy</p>
+                  <p className="text-xl font-bold text-emerald-700">
                     {approvedToday.length}
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm text-[#386FA4]">Aprobadas semana</p>
-                  <p className="text-lg font-bold text-[#12130F]">
-                    {
-                      currentUserClaims.filter(
-                        (claim) => claim.status === "approved"
-                      ).length
-                    }
+
+                <div className="rounded-xl bg-blue-50 p-3">
+                  <p className="text-xs text-blue-600">Esta semana</p>
+                  <p className="text-xl font-bold text-blue-700">
+                    {approvedThisWeek.length}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-purple-50 p-3">
+                  <p className="text-xs text-purple-600">Aprobadas totales</p>
+                  <p className="text-xl font-bold text-purple-700">
+                    {approvedClaims.length}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-amber-50 p-3">
+                  <p className="text-xs text-amber-600">Pendientes</p>
+                  <p className="text-xl font-bold text-amber-700">
+                    {pendingUserClaims.length}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-red-50 p-3">
+                  <p className="text-xs text-red-600">Rechazadas</p>
+                  <p className="text-xl font-bold text-red-700">
+                    {rejectedClaims.length}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs text-slate-600">Puntos disponibles</p>
+                  <p className="text-xl font-bold text-slate-700">
+                    {progress.points}
                   </p>
                 </div>
               </div>
@@ -790,12 +954,12 @@ export function Tasks({
                 </Button>
               </div>
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {currentUserClaims.length === 0 && (
+                {trackedUserClaims.length === 0 && (
                   <p className="text-sm text-[#386FA4]">
                     Todavía no hay tareas registradas.
                   </p>
                 )}
-                {currentUserClaims.map((claim) => {
+                {trackedUserClaims.map((claim) => {
                   const task = tasks.find((item) => item.id === claim.taskId);
                   return (
                     <div
@@ -806,8 +970,10 @@ export function Tasks({
                         <p className="font-semibold text-[#12130F]">
                           {task?.title ?? "Tarea"}
                         </p>
-                        <span className="text-xs text-[#386FA4]">
-                          {formatDate(claim.timestamp)} {formatTime(claim.timestamp)}
+                        <span className="text-right text-xs text-[#386FA4]">
+                          {formatDate(claim.approvedAt ?? claim.timestamp)}
+                          <br />
+                          {formatTime(claim.approvedAt ?? claim.timestamp)}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mt-2">
@@ -830,6 +996,20 @@ export function Tasks({
                           </Badge>
                         )}
                       </div>
+
+                      {claim.note && (
+                        <p className="mt-2 text-xs text-[#386FA4]">
+                          Nota enviada: {claim.note}
+                        </p>
+                      )}
+
+                      {claim.status === "rejected" && (
+                        <p className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-600">
+                          Motivo:{" "}
+                          {claim.rejectionNote?.trim() ||
+                            "No se informó un motivo"}
+                        </p>
+                      )}
                     </div>
                   );
                 })}
