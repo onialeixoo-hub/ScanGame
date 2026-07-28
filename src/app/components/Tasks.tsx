@@ -131,8 +131,16 @@ export function Tasks({
         .filter((claim) => claim.userId === trackedUser.id)
         .sort(
           (a, b) =>
-            new Date(b.approvedAt ?? b.timestamp).getTime() -
-            new Date(a.approvedAt ?? a.timestamp).getTime()
+            new Date(
+              b.rejectedAt ??
+                b.approvedAt ??
+                b.timestamp
+            ).getTime() -
+            new Date(
+              a.rejectedAt ??
+                a.approvedAt ??
+                a.timestamp
+            ).getTime()
         ),
     [claims, trackedUser.id]
   );
@@ -219,7 +227,17 @@ export function Tasks({
     });
 
     return relevantClaims.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      (a, b) =>
+        new Date(
+          b.rejectedAt ??
+            b.approvedAt ??
+            b.timestamp
+        ).getTime() -
+        new Date(
+          a.rejectedAt ??
+            a.approvedAt ??
+            a.timestamp
+        ).getTime()
     )[0];
   };
 
@@ -508,8 +526,12 @@ export function Tasks({
                             </Button>
                           )}
                           {status === "rejected" && (
-                            <Button variant="secondary" disabled className="w-full sm:w-auto">
-                              Rechazada ❌
+                            <Button
+                              variant="outline"
+                              className="w-full border-red-300 text-red-600 hover:bg-red-50 sm:w-auto"
+                              onClick={() => openTaskModal(task)}
+                            >
+                              Volver a enviar
                             </Button>
                           )}
                           {status === "rejected" && latestClaim?.rejectionNote && (
