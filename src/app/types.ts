@@ -1,6 +1,7 @@
 export type Role = "admin" | "user";
 export type TaskFrequency = "once" | "daily" | "weekly";
 export type ClaimStatus = "pending" | "approved" | "rejected";
+
 export type AppCategory =
   | "Alimentos"
   | "Bebidas"
@@ -9,7 +10,12 @@ export type AppCategory =
   | "Mascotas"
   | "Salud/Farmacia"
   | "Otros";
-export type ProductRarity = "común" | "raro" | "épico" | "legendario";
+
+export type ProductRarity =
+  | "común"
+  | "raro"
+  | "épico"
+  | "legendario";
 
 export interface User {
   id: string;
@@ -39,6 +45,7 @@ export interface TaskClaim {
   note?: string;
   approvedBy?: string;
   approvedAt?: string;
+  rejectedAt?: string;
   rejectionNote?: string;
 }
 
@@ -49,6 +56,7 @@ export interface UserProgress {
   bonusAwardedOn?: string;
   scanStreak?: number;
   lastScanDate?: string;
+  lastSeenRejectionAt?: string;
 }
 
 export interface CollectedProduct {
