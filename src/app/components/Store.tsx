@@ -47,6 +47,8 @@ import {
   TASK_PRIORITY_CONFIG
 } from "@/app/lib/task-priority";
 
+import { seedStarterStore } from "@/app/lib/store-starter";
+
 interface StoreProps {
   currentUser: User;
   progress: UserProgress;
@@ -123,7 +125,11 @@ export function Store({ currentUser, progress }: StoreProps) {
   });
 
   useEffect(() => {
-    const unsubscribeCategories = onSnapshot(
+  if (isAdmin) {
+    void seedStarterStore();
+  }
+
+  const unsubscribeCategories = onSnapshot(
       collection(db, "storeCategories"),
       (snapshot) => {
         const nextCategories = snapshot.docs
