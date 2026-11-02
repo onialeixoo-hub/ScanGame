@@ -21,6 +21,8 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Progress } from "@/app/components/ui/progress";
+import type { TaskPriority } from "@/app/types";
+import { TASK_PRIORITY_CONFIG, resolveTaskPriority } from "@/app/lib/task-priority";
 import {
   AVATAR_OPTIONS,
   getAvatarSrc,
@@ -33,6 +35,7 @@ interface Task {
   xpReward: number;
   pointsReward: number;
   completed: boolean;
+  priority?: TaskPriority;
 }
 
 interface HomeProps {
@@ -95,20 +98,16 @@ export function Home({
   }
 
   const xpInCurrentLevel = Math.max(currentXP - levelStartXp, 0);
-
   const xpRequiredForCurrentLevel = Math.max(
     xpToNextLevel - levelStartXp,
     1
   );
-
   const xpPercentage = Math.min(
     (xpInCurrentLevel / xpRequiredForCurrentLevel) * 100,
     100
   );
 
-  const todayTasks = tasks
-    .filter((task) => !task.completed)
-    .slice(0, 2);
+  const todayTasks = tasks.filter((task) => !task.completed).slice(0, 2);
 
   return (
     <div className="min-h-screen bg-[#E2DADB] px-4 pb-24 pt-3">
@@ -130,7 +129,6 @@ export function Home({
           <p className="text-xs font-semibold text-[#386FA4]">
             Bienvenido de nuevo
           </p>
-
           <h1 className="truncate text-xl font-bold leading-tight text-[#12130F]">
             {username}
           </h1>
@@ -164,7 +162,6 @@ export function Home({
               <p className="text-xs font-semibold text-white/70">
                 Nivel actual
               </p>
-
               <p className="text-xl font-bold leading-tight">
                 Nivel {userLevel}
               </p>
@@ -207,11 +204,7 @@ export function Home({
           <div className="mb-1 flex h-8 w-8 items-center justify-center rounded-lg bg-amber-400/20">
             <Star className="h-5 w-5 fill-amber-400 text-amber-500" />
           </div>
-
-          <p className="text-xl font-bold leading-tight text-amber-950">
-            {totalPoints}
-          </p>
-
+          <p className="text-xl font-bold leading-tight text-amber-950">{totalPoints}</p>
           <p className="text-xs font-semibold text-amber-700">
             Puntos disponibles
           </p>
@@ -221,11 +214,9 @@ export function Home({
           <div className="mb-1 flex h-8 w-8 items-center justify-center rounded-lg bg-orange-400/20">
             <Flame className="h-5 w-5 text-orange-500" />
           </div>
-
           <p className="text-xl font-bold leading-tight text-orange-950">
             {dailyStreak} días
           </p>
-
           <p className="text-xs font-semibold text-orange-700">
             Racha actual
           </p>
@@ -244,7 +235,6 @@ export function Home({
             <h2 className="text-base font-bold text-[#12130F]">
               Tareas del día
             </h2>
-
             <p className="text-xs text-[#386FA4]">
               {activeTasks} pendiente{activeTasks === 1 ? "" : "s"}
             </p>
@@ -263,56 +253,68 @@ export function Home({
 
         {todayTasks.length > 0 ? (
           <div className="space-y-2">
-            {todayTasks.map((task, index) => (
-              <motion.div
-                key={task.id}
-                initial={{ opacity: 0, x: -16 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{
-                  delay: 0.18 + index * 0.05
-                }}
-              >
-                <Card className="border-2 border-[#386FA4]/15 bg-white p-3 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => onCompleteTask(task.id)}
-                      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#386FA4] transition hover:bg-[#386FA4]"
-                      aria-label={`Completar ${task.title}`}
-                    >
-                      <Check className="h-4 w-4 text-[#386FA4]" />
-                    </button>
+            {todayTasks.map((task, index) => {
+              const priority = resolveTaskPriority(
+                task.priority,
+                task.pointsReward
+              );
+              const priorityConfig = TASK_PRIORITY_CONFIG[priority];
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-bold text-[#12130F]">
-                        {task.title}
-                      </p>
+              return (
+                <motion.div
+                  key={task.id}
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.18 + index * 0.05 }}
+                >
+                  <Card
+                    className={`border-2 bg-white p-3 shadow-sm ${priorityConfig.borderClass}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => onCompleteTask(task.id)}
+                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#386FA4] transition hover:bg-[#386FA4]"
+                        aria-label={`Completar ${task.title}`}
+                      >
+                        <Check className="h-4 w-4 text-[#386FA4]" />
+                      </button>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                        <span className="rounded-full bg-purple-100 px-2 py-1 font-semibold text-purple-700">
-                          +{task.xpReward} XP
-                        </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-[#12130F]">
+                          {task.title}
+                        </p>
 
-                        <span className="rounded-full bg-amber-100 px-2 py-1 font-semibold text-amber-700">
-                          +{task.pointsReward} puntos
-                        </span>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                          <span
+                            className={`rounded-full border px-2 py-1 font-semibold ${priorityConfig.badgeClass}`}
+                          >
+                            {priorityConfig.shortLabel}
+                          </span>
+
+                          <span className="rounded-full bg-purple-100 px-2 py-1 font-semibold text-purple-700">
+                            +{task.xpReward} XP
+                          </span>
+
+                          <span className="rounded-full bg-amber-100 px-2 py-1 font-semibold text-amber-700">
+                            +{task.pointsReward} puntos
+                          </span>
+                        </div>
                       </div>
-                    </div>
 
-                    <Sparkles className="h-5 w-5 flex-shrink-0 text-amber-500" />
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
+                      <Sparkles className="h-5 w-5 flex-shrink-0 text-amber-500" />
+                    </div>
+                  </Card>
+                </motion.div>
+              );
+            })}
           </div>
         ) : (
           <Card className="border-2 border-dashed border-emerald-300 bg-emerald-50/70 px-4 py-3 text-center">
             <Check className="mx-auto mb-1 h-7 w-7 text-emerald-500" />
-
             <p className="text-sm font-bold text-emerald-800">
               No quedan tareas pendientes
             </p>
-
             <p className="mt-0.5 text-xs text-emerald-700">
               Podés revisar el historial desde Tareas.
             </p>
@@ -320,7 +322,7 @@ export function Home({
         )}
       </motion.section>
 
-      {/* Escanear producto */}
+      {/* Escaneo secundario */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -337,7 +339,6 @@ export function Home({
               <p className="text-sm font-bold text-[#12130F]">
                 Escanear producto
               </p>
-
               <p className="truncate text-xs text-[#386FA4]">
                 Sumá productos a tu colección.
               </p>
@@ -355,7 +356,7 @@ export function Home({
         </Card>
       </motion.div>
 
-      {/* Estadísticas */}
+      {/* Estadísticas al final */}
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -364,7 +365,6 @@ export function Home({
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-[#386FA4]" />
-
             <h2 className="text-lg font-bold text-[#12130F]">
               Estadísticas
             </h2>
@@ -383,38 +383,20 @@ export function Home({
         <div className="grid grid-cols-3 gap-2">
           <Card className="border-0 bg-gradient-to-br from-[#386FA4] to-[#2d5a85] p-3 text-center text-white shadow-md">
             <Package className="mx-auto mb-2 h-6 w-6" />
-
-            <p className="text-2xl font-bold">
-              {totalProducts}
-            </p>
-
-            <p className="text-xs text-white/80">
-              Productos
-            </p>
+            <p className="text-2xl font-bold">{totalProducts}</p>
+            <p className="text-xs text-white/80">Productos</p>
           </Card>
 
           <Card className="border-0 bg-gradient-to-br from-[#7CAE7A] to-[#5d9259] p-3 text-center text-white shadow-md">
             <Grid3x3 className="mx-auto mb-2 h-6 w-6" />
-
-            <p className="text-2xl font-bold">
-              {categoriesCount}
-            </p>
-
-            <p className="text-xs text-white/80">
-              Categorías
-            </p>
+            <p className="text-2xl font-bold">{categoriesCount}</p>
+            <p className="text-xs text-white/80">Categorías</p>
           </Card>
 
           <Card className="border-0 bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] p-3 text-center text-white shadow-md">
             <ListTodo className="mx-auto mb-2 h-6 w-6" />
-
-            <p className="text-2xl font-bold">
-              {completedTasksToday}
-            </p>
-
-            <p className="text-xs text-white/80">
-              Hechas hoy
-            </p>
+            <p className="text-2xl font-bold">{completedTasksToday}</p>
+            <p className="text-xs text-white/80">Hechas hoy</p>
           </Card>
         </div>
       </motion.section>
@@ -439,11 +421,7 @@ export function Home({
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{
-                type: "spring",
-                stiffness: 260,
-                damping: 30
-              }}
+              transition={{ type: "spring", stiffness: 260, damping: 30 }}
             >
               <div className="mb-6 flex items-center justify-between">
                 <div className="flex min-w-0 items-center gap-3">
@@ -454,15 +432,9 @@ export function Home({
                       className="h-full w-full object-cover"
                     />
                   </div>
-
                   <div className="min-w-0">
-                    <p className="truncate text-lg font-semibold">
-                      {username}
-                    </p>
-
-                    <p className="text-xs text-white/80">
-                      Nivel {userLevel}
-                    </p>
+                    <p className="truncate text-lg font-semibold">{username}</p>
+                    <p className="text-xs text-white/80">Nivel {userLevel}</p>
                   </div>
                 </div>
 
@@ -505,23 +477,12 @@ export function Home({
 
               <div className="grid grid-cols-2 gap-3">
                 <Card className="bg-white/95 p-3 text-[#12130F]">
-                  <p className="text-xs text-[#386FA4]">
-                    Puntos disponibles
-                  </p>
-
-                  <p className="text-lg font-bold">
-                    {totalPoints}
-                  </p>
+                  <p className="text-xs text-[#386FA4]">Puntos disponibles</p>
+                  <p className="text-lg font-bold">{totalPoints}</p>
                 </Card>
-
                 <Card className="bg-white/95 p-3 text-[#12130F]">
-                  <p className="text-xs text-[#386FA4]">
-                    Racha
-                  </p>
-
-                  <p className="text-lg font-bold">
-                    {dailyStreak} días
-                  </p>
+                  <p className="text-xs text-[#386FA4]">Racha</p>
+                  <p className="text-lg font-bold">{dailyStreak} días</p>
                 </Card>
               </div>
 
@@ -552,16 +513,12 @@ export function Home({
               <h3 className="mb-3 text-lg font-bold text-[#12130F]">
                 Editar nombre de perfil
               </h3>
-
               <Input
                 value={pendingName}
-                onChange={(event) =>
-                  setPendingName(event.target.value)
-                }
+                onChange={(event) => setPendingName(event.target.value)}
                 placeholder="Nombre de perfil"
                 className="mb-4"
               />
-
               <div className="flex gap-3">
                 <Button
                   type="button"
@@ -570,16 +527,12 @@ export function Home({
                 >
                   Cancelar
                 </Button>
-
                 <Button
                   type="button"
                   className="bg-gradient-to-r from-[#386FA4] to-[#2d5a85] text-white"
                   onClick={() => {
                     if (pendingName.trim()) {
-                      onUpdateProfileName(
-                        pendingName.trim()
-                      );
-
+                      onUpdateProfileName(pendingName.trim());
                       setShowNameModal(false);
                     }
                   }}
@@ -606,13 +559,10 @@ export function Home({
                 <h3 className="text-lg font-bold text-[#12130F]">
                   Elegí tu avatar
                 </h3>
-
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() =>
-                    setShowAvatarModal(false)
-                  }
+                  onClick={() => setShowAvatarModal(false)}
                 >
                   Cerrar
                 </Button>
@@ -638,7 +588,6 @@ export function Home({
                       alt={option.label}
                       className="w-full rounded-xl object-cover"
                     />
-
                     <p className="mt-2 text-xs font-semibold text-[#386FA4]">
                       {option.label}
                     </p>
