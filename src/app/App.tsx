@@ -4,7 +4,7 @@ import { Menu } from "lucide-react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { Toaster, toast } from "sonner";
 import { AccountMenu } from "./components/AccountMenu";
-import { BottomNav } from "./components/BottomNav";
+import { BottomNav, type AppTab } from "./components/BottomNav";
 import { Collection } from "./components/Collection";
 import { Home } from "./components/Home";
 import { LoginScreen } from "./components/LoginScreen";
@@ -12,6 +12,7 @@ import { ProductDetail } from "./components/ProductDetail";
 import { ScanResult } from "./components/ScanResult";
 import { Scanner } from "./components/Scanner";
 import { Tasks } from "./components/Tasks";
+import { Store } from "./components/Store";
 import { Button } from "./components/ui/button";
 import {
   addDoc,
@@ -138,7 +139,8 @@ export default function App() {
   const [collectionByUser, setCollectionByUser] = useState<
     Record<string, CollectedProduct[]>
   >({});
-  const [activeTab, setActiveTab] = useState<"home" | "collection" | "tasks">("home");
+  const [activeTab, setActiveTab] = useState<AppTab>("home");
+  const [adminSection, setAdminSection] = useState<"tasks" | "store">("tasks");
   const [showScanner, setShowScanner] = useState(false);
   const [scanPopup, setScanPopup] = useState<{
     title: string;
@@ -1333,6 +1335,7 @@ export default function App() {
       setShowAccountMenu(false);
       setCurrentUser(null);
       setActiveTab("home");
+      setAdminSection("tasks");
       setShowScanner(false);
       setScannedProduct(null);
       setSelectedProduct(null);
@@ -1394,6 +1397,7 @@ export default function App() {
       title: task.title,
       xpReward: task.xp,
       pointsReward: task.points,
+      priority: task.priority,
       completed: isCompleted
     };
   });
@@ -1465,7 +1469,7 @@ export default function App() {
 
   if (currentUser.role === "admin") {
     return (
-      <div className="bg-[#E2DADB] min-h-screen font-sans text-[#12130F]">
+      <div className="min-h-screen bg-[#E2DADB] font-sans text-[#12130F]">
         <Toaster position="top-center" richColors />
 
         <Button
@@ -1473,7 +1477,7 @@ export default function App() {
           size="icon"
           aria-label="Abrir menú de cuenta"
           onClick={() => setShowAccountMenu(true)}
-          className="fixed bottom-6 right-5 z-[60] h-14 w-14 rounded-full bg-[#386FA4] text-white shadow-2xl hover:bg-[#2d5a85]"
+          className="fixed bottom-24 right-5 z-[70] h-14 w-14 rounded-full bg-[#386FA4] text-white shadow-2xl hover:bg-[#2d5a85]"
         >
           <Menu className="h-6 w-6" />
         </Button>
@@ -1484,33 +1488,76 @@ export default function App() {
           progress={activeProgress}
           productsCount={userCollection.length}
           categoriesCount={
-            new Set(userCollection.map((product) => product.appCategory)).size
+            new Set(
+              userCollection.map(
+                (product) => product.appCategory
+              )
+            ).size
           }
           onClose={() => setShowAccountMenu(false)}
           onLogout={() => void handleLogout()}
         />
 
-        <div className="pb-20 max-w-md mx-auto bg-[#E2DADB] min-h-screen relative shadow-2xl overflow-hidden">
-          <Tasks
-            currentUser={currentUser}
-            users={users}
-            tasks={tasks}
-            claims={claims}
-            progress={activeProgress}
-            productsCount={userCollection.length}
-            categoriesCount={
-              new Set(userCollection.map((product) => product.appCategory)).size
-            }
-            dailyGoal={DAILY_GOAL}
-            bonusPoints={BONUS_POINTS}
-            onCreateClaim={handleCreateClaim}
-            onApproveClaim={handleApproveClaim}
-            onRejectClaim={handleRejectClaim}
-            onCreateTask={handleCreateTask}
-            onUpdateTask={handleUpdateTask}
-            onDeleteTask={handleDeleteTask}
-            onResetProgress={handleResetProgress}
-          />
+        <div className="relative mx-auto min-h-screen max-w-md overflow-hidden bg-[#E2DADB] pb-24 shadow-2xl">
+          {adminSection === "tasks" ? (
+            <Tasks
+              currentUser={currentUser}
+              users={users}
+              tasks={tasks}
+              claims={claims}
+              progress={activeProgress}
+              productsCount={userCollection.length}
+              categoriesCount={
+                new Set(
+                  userCollection.map(
+                    (product) => product.appCategory
+                  )
+                ).size
+              }
+              dailyGoal={DAILY_GOAL}
+              bonusPoints={BONUS_POINTS}
+              onCreateClaim={handleCreateClaim}
+              onApproveClaim={handleApproveClaim}
+              onRejectClaim={handleRejectClaim}
+              onCreateTask={handleCreateTask}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
+              onResetProgress={handleResetProgress}
+            />
+          ) : (
+            <Store
+              currentUser={currentUser}
+              progress={activeProgress}
+            />
+          )}
+
+          <div className="fixed bottom-0 left-0 right-0 z-[60] border-t-2 border-[#386FA4]/20 bg-white shadow-2xl">
+            <div className="mx-auto grid max-w-md grid-cols-2 gap-2 p-2">
+              <button
+                type="button"
+                onClick={() => setAdminSection("tasks")}
+                className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                  adminSection === "tasks"
+                    ? "bg-[#386FA4] text-white"
+                    : "bg-[#386FA4]/5 text-[#386FA4]"
+                }`}
+              >
+                Tareas
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAdminSection("store")}
+                className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                  adminSection === "store"
+                    ? "bg-[#386FA4] text-white"
+                    : "bg-[#386FA4]/5 text-[#386FA4]"
+                }`}
+              >
+                Tienda
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1696,6 +1743,11 @@ export default function App() {
             <Collection
               products={userCollection}
               onProductClick={(product) => setSelectedProduct(product)}
+            />
+          ) : activeTab === "store" ? (
+            <Store
+              currentUser={currentUser}
+              progress={activeProgress}
             />
           ) : activeTab === "tasks" ? (
             <Tasks
