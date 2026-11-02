@@ -33,7 +33,20 @@ import { Progress } from "@/app/components/ui/progress";
 import { Switch } from "@/app/components/ui/switch";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Input } from "@/app/components/ui/input";
-import type { Task, TaskClaim, TaskFrequency, User, UserProgress } from "@/app/types";
+import type {
+  Task,
+  TaskClaim,
+  TaskFrequency,
+  TaskPriority,
+  User,
+  UserProgress
+} from "@/app/types";
+import {
+  getPriorityFromPoints,
+  resolveTaskPriority,
+  TASK_PRIORITY_CONFIG,
+  TASK_PRIORITY_ORDER
+} from "@/app/lib/task-priority";
 
 interface TasksProps {
   currentUser: User;
@@ -112,10 +125,11 @@ export function Tasks({
   const [taskForm, setTaskForm] = useState<Omit<Task, "id">>({
     title: "",
     description: "",
-    points: 50,
-    xp: 25,
+    points: 60,
+    xp: 30,
     frequency: "daily",
-    active: true
+    active: true,
+    priority: "medium"
   });
 
   const todayKey = useMemo(() => new Date().toDateString(), []);
@@ -279,17 +293,19 @@ export function Tasks({
         points: task.points,
         xp: task.xp,
         frequency: task.frequency,
-        active: task.active
+        active: task.active,
+        priority: resolveTaskPriority(task.priority, task.points)
       });
       setEditingTaskId(task.id);
     } else {
       setTaskForm({
         title: "",
         description: "",
-        points: 50,
-        xp: 25,
+        points: 60,
+        xp: 30,
         frequency: "daily",
-        active: true
+        active: true,
+        priority: "medium"
       });
       setEditingTaskId(null);
     }
@@ -299,14 +315,20 @@ export function Tasks({
   const handleSubmitTaskForm = () => {
     if (!taskForm.title.trim()) return;
 
+    const normalizedTask = {
+      ...taskForm,
+      title: taskForm.title.trim(),
+      points: Math.max(Math.round(taskForm.points), 1),
+      xp: Math.max(Math.round(taskForm.xp), 1),
+      priority: getPriorityFromPoints(taskForm.points)
+    };
+
     if (taskFormMode === "create") {
-      onCreateTask(taskForm);
+      onCreateTask(normalizedTask);
     }
 
-    if (taskFormMode === "edit") {
-      if (editingTaskId) {
-        onUpdateTask(editingTaskId, taskForm);
-      }
+    if (taskFormMode === "edit" && editingTaskId) {
+      onUpdateTask(editingTaskId, normalizedTask);
     }
 
     setTaskFormOpen(false);
@@ -495,6 +517,18 @@ export function Tasks({
                             </p>
                           )}
                           <div className="flex flex-wrap items-center gap-2">
+                            {(() => {
+                              const priority = resolveTaskPriority(
+                                task.priority,
+                                task.points
+                              );
+                              const config = TASK_PRIORITY_CONFIG[priority];
+                              return (
+                                <Badge className={`${config.badgeClass} border`}>
+                                  {config.shortLabel}
+                                </Badge>
+                              );
+                            })()}
                             <Badge className="bg-blue-100 text-blue-700 border-0">
                               +{task.points} pts
                             </Badge>
@@ -669,7 +703,19 @@ export function Tasks({
                           {task.description}
                         </p>
                       )}
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {(() => {
+                          const priority = resolveTaskPriority(
+                            task.priority,
+                            task.points
+                          );
+                          const config = TASK_PRIORITY_CONFIG[priority];
+                          return (
+                            <Badge className={`${config.badgeClass} border`}>
+                              {config.shortLabel}
+                            </Badge>
+                          );
+                        })()}
                         <Badge className="bg-blue-100 text-blue-700 border-0">
                           {frequencyLabels[task.frequency]}
                         </Badge>
@@ -911,29 +957,105 @@ export function Tasks({
                   }
                   placeholder="Descripción opcional"
                 />
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-bold text-[#12130F]">
+                        Prioridad
+                      </p>
+                      <p className="text-xs text-[#386FA4]">
+                        Más puntos = mayor importancia de la tarea.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-1">
+                    {TASK_PRIORITY_ORDER.map((priority) => {
+                      const config = TASK_PRIORITY_CONFIG[priority];
+                      const selectedPriority = getPriorityFromPoints(
+                        taskForm.points
+                      );
+
+                      return (
+                        <button
+                          key={priority}
+                          type="button"
+                          className={`rounded-xl border px-1 py-2 text-[10px] font-bold transition ${
+                            selectedPriority === priority
+                              ? config.buttonClass
+                              : "border-slate-200 bg-white text-slate-500"
+                          }`}
+                          onClick={() =>
+                            setTaskForm((prev) => ({
+                              ...prev,
+                              priority,
+                              points: config.points,
+                              xp: config.xp
+                            }))
+                          }
+                        >
+                          {config.shortLabel}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-2 rounded-xl bg-slate-50 p-3">
+                    {(() => {
+                      const priority = getPriorityFromPoints(
+                        taskForm.points
+                      );
+                      const config = TASK_PRIORITY_CONFIG[priority];
+                      return (
+                        <p className="text-xs text-slate-600">
+                          <strong>{config.label}:</strong>{" "}
+                          {config.description}. Sugerencia:{" "}
+                          {config.points} pts / {config.xp} XP.
+                        </p>
+                      );
+                    })()}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    type="number"
-                    value={taskForm.points}
-                    onChange={(event) =>
-                      setTaskForm((prev) => ({
-                        ...prev,
-                        points: Number(event.target.value)
-                      }))
-                    }
-                    placeholder="Puntos"
-                  />
-                  <Input
-                    type="number"
-                    value={taskForm.xp}
-                    onChange={(event) =>
-                      setTaskForm((prev) => ({
-                        ...prev,
-                        xp: Number(event.target.value)
-                      }))
-                    }
-                    placeholder="XP"
-                  />
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-[#386FA4]">
+                      Puntos
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={taskForm.points}
+                      onChange={(event) => {
+                        const points = Number(event.target.value);
+                        setTaskForm((prev) => ({
+                          ...prev,
+                          points,
+                          priority: getPriorityFromPoints(points)
+                        }));
+                      }}
+                      placeholder="Puntos"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-[#386FA4]">
+                      XP
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={taskForm.xp}
+                      onChange={(event) =>
+                        setTaskForm((prev) => ({
+                          ...prev,
+                          xp: Number(event.target.value)
+                        }))
+                      }
+                      placeholder="XP"
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {(["daily", "weekly", "once"] as TaskFrequency[]).map((freq) => (
