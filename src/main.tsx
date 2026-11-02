@@ -2,7 +2,14 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import App from "./app/App";
-import { GoalsLauncher } from "./app/components/GoalsLauncher";
+
+import {
+  GoalsLauncher
+} from "./app/components/GoalsLauncher";
+
+import {
+  ScanPointsAwarder
+} from "./app/components/ScanPointsAwarder";
 
 import "./styles/index.css";
 
@@ -11,6 +18,9 @@ ReactDOM.createRoot(
 ).render(
   <React.StrictMode>
     <App />
+
     <GoalsLauncher />
+
+    <ScanPointsAwarder />
   </React.StrictMode>
 );
