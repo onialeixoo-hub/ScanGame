@@ -8,7 +8,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import type { User } from "@/app/types";
-import logo from "@/assets/logo-scangame.svg";
+import logo from "@/assets/logo-scangame.png";
 
 interface LoginScreenProps {
   users: User[];
