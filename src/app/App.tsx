@@ -141,6 +141,7 @@ export default function App() {
   >({});
   const [activeTab, setActiveTab] = useState<AppTab>("home");
   const [adminSection, setAdminSection] = useState<"tasks" | "store">("tasks");
+  const [storePendingCount, setStorePendingCount] = useState(0);
   const [showScanner, setShowScanner] = useState(false);
   const [scanPopup, setScanPopup] = useState<{
     title: string;
@@ -503,7 +504,51 @@ export default function App() {
             (user) => user.role === "user" && user.id !== "user-1"
           )
         : currentUser;
+useEffect(() => {
+  if (!currentUser || currentUser.role !== "admin") {
+    setStorePendingCount(0);
+    return;
+  }
 
+  let pendingRewards = 0;
+  let pendingTasks = 0;
+
+  const updateTotal = () => {
+    setStorePendingCount(
+      pendingRewards + pendingTasks
+    );
+  };
+
+  const unsubscribeRewards = onSnapshot(
+    collection(db, "rewardRequests"),
+    (snapshot) => {
+      pendingRewards = snapshot.docs.filter(
+        (document) =>
+          document.data().status === "pending"
+      ).length;
+
+      updateTotal();
+    }
+  );
+
+  const unsubscribeTasks = onSnapshot(
+    collection(db, "taskRequests"),
+    (snapshot) => {
+      pendingTasks = snapshot.docs.filter(
+        (document) =>
+          document.data().status === "pending"
+      ).length;
+
+      updateTotal();
+    }
+  );
+
+  return () => {
+    unsubscribeRewards();
+    unsubscribeTasks();
+  };
+}, [currentUser?.id, currentUser?.role]);
+    
     if (!collectionOwner || collectionOwner.role !== "user") {
       setCollectionByUser({});
       return;
@@ -1545,17 +1590,25 @@ export default function App() {
                 Tareas
               </button>
 
-              <button
-                type="button"
-                onClick={() => setAdminSection("store")}
-                className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                  adminSection === "store"
-                    ? "bg-[#386FA4] text-white"
-                    : "bg-[#386FA4]/5 text-[#386FA4]"
-                }`}
-              >
-                Tienda
-              </button>
+<button
+  type="button"
+  onClick={() => setAdminSection("store")}
+  className={`relative rounded-2xl px-4 py-3 text-sm font-bold transition ${
+    adminSection === "store"
+      ? "bg-[#386FA4] text-white"
+      : "bg-[#386FA4]/5 text-[#386FA4]"
+  }`}
+>
+  Tienda
+
+  {storePendingCount > 0 && (
+    <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white shadow-md">
+      {storePendingCount > 9
+        ? "9+"
+        : storePendingCount}
+    </span>
+  )}
+</button>
             </div>
           </div>
         </div>
