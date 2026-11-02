@@ -1,20 +1,6 @@
-import {
-  useEffect,
-  useRef,
-  useState
-} from "react";
+import { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/library";
-import { motion } from "motion/react";
-import {
-  AlertCircle,
-  CheckCircle2,
-  Flashlight,
-  FlashlightOff,
-  Keyboard,
-  RotateCcw,
-  ScanLine,
-  X
-} from "lucide-react";
+import { Keyboard, ScanLine, X, RotateCcw } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 
 interface ScannerProps {
@@ -22,14 +8,9 @@ interface ScannerProps {
   onClose: () => void;
 }
 
-type CameraState =
-  | "starting"
-  | "active"
-  | "denied"
-  | "error"
-  | "success";
+type Status = "starting" | "active" | "error" | "success";
 
-const isValidBarcode = (value: string) =>
+const validBarcode = (value: string) =>
   /^\d{6,18}$/.test(value.trim());
 
 export function Scanner({
@@ -37,59 +18,79 @@ export function Scanner({
   onClose
 }: ScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const readerRef =
-    useRef<BrowserMultiFormatReader | null>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const lockedRef = useRef(false);
-  const scanCallbackRef = useRef(onScanComplete);
 
-  const [cameraState, setCameraState] =
-    useState<CameraState>("starting");
-  const [cameraError, setCameraError] =
-    useState<string | null>(null);
-  const [flashAvailable, setFlashAvailable] =
-    useState(false);
-  const [flashEnabled, setFlashEnabled] =
-    useState(false);
-  const [manualOpen, setManualOpen] =
-    useState(false);
-  const [manualBarcode, setManualBarcode] =
-    useState("");
-  const [manualError, setManualError] =
-    useState<string | null>(null);
-
-  useEffect(() => {
-    scanCallbackRef.current = onScanComplete;
-  }, [onScanComplete]);
-
-  const getVideoTrack = () => {
-    const stream = videoRef.current
-      ?.srcObject as MediaStream | null;
-
-    return stream?.getVideoTracks()[0];
-  };
+  const [status, setStatus] = useState<Status>("starting");
+  const [error, setError] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState("");
+  const [manualError, setManualError] = useState("");
 
   const stopScanner = () => {
     try {
       readerRef.current?.reset();
     } catch {
-      // Ignore reset errors.
+      // Nothing to stop.
     }
 
-    const stream = videoRef.current
-      ?.srcObject as MediaStream | null;
-
-    stream?.getTracks().forEach((track) => {
-      track.stop();
-    });
+    const stream = videoRef.current?.srcObject as MediaStream | null;
+    stream?.getTracks().forEach((track) => track.stop());
 
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
 
     readerRef.current = null;
-    setFlashAvailable(false);
-    setFlashEnabled(false);
   };
 
   const finishScan = (rawValue: string) => {
     const value = rawValue.trim();
+
+    if (lockedRef.current || !validBarcode(value)) return;
+
+    lockedRef.current = true;
+    setStatus("success");
+    stopScanner();
+
+    navigator.vibrate?.(80);
+
+    window.setTimeout(() => {
+      onScanComplete(value);
+    }, 180);
+  };
+
+  const startScanner = async () => {
+    stopScanner();
+    lockedRef.current = false;
+    setStatus("starting");
+    setError("");
+
+    if (!videoRef.current) return;
+
+    try {
+      const reader = new BrowserMultiFormatReader();
+      reader.timeBetweenDecodingAttempts = 120;
+      readerRef.current = reader;
+
+      const devices = await reader.listVideoInputDevices();
+
+      const rearCamera =
+        [...devices].reverse().find((device) =>
+          /back|rear|environment|trasera/i.test(device.label)
+        ) ?? devices[devices.length - 1];
+
+      await reader.decodeFromVideoDevice(
+        rearCamera?.deviceId ?? null,
+        videoRef.current,
+        (result) => {
+          if (result && !lockedRef.current) {
+            finishScan(result.getText());
+          }
+        }
+      );
+
+      if (!lockedRef.current) {
+        setStatus("active");
+      }
+    } catch (cameraError) {
