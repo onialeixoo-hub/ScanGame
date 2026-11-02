@@ -504,50 +504,6 @@ export default function App() {
             (user) => user.role === "user" && user.id !== "user-1"
           )
         : currentUser;
-useEffect(() => {
-  if (!currentUser || currentUser.role !== "admin") {
-    setStorePendingCount(0);
-    return;
-  }
-
-  let pendingRewards = 0;
-  let pendingTasks = 0;
-
-  const updateTotal = () => {
-    setStorePendingCount(
-      pendingRewards + pendingTasks
-    );
-  };
-
-  const unsubscribeRewards = onSnapshot(
-    collection(db, "rewardRequests"),
-    (snapshot) => {
-      pendingRewards = snapshot.docs.filter(
-        (document) =>
-          document.data().status === "pending"
-      ).length;
-
-      updateTotal();
-    }
-  );
-
-  const unsubscribeTasks = onSnapshot(
-    collection(db, "taskRequests"),
-    (snapshot) => {
-      pendingTasks = snapshot.docs.filter(
-        (document) =>
-          document.data().status === "pending"
-      ).length;
-
-      updateTotal();
-    }
-  );
-
-  return () => {
-    unsubscribeRewards();
-    unsubscribeTasks();
-  };
-}, [currentUser?.id, currentUser?.role]);
     
     if (!collectionOwner || collectionOwner.role !== "user") {
       setCollectionByUser({});
