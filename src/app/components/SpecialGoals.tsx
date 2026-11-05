@@ -55,20 +55,20 @@ interface GoalProgress {
   completedAt?: string | null;
 }
 
-interface GoalDraft {
-  name: string;
-  description: string;
-  targetPoints: number;
-  emoji: string;
-  active: boolean;
-}
-
 interface GoalTaskRequest {
   id: string;
   rewardId: string;
   userId: string;
   status: string;
   requestType?: string;
+}
+
+interface GoalDraft {
+  name: string;
+  description: string;
+  targetPoints: number;
+  emoji: string;
+  active: boolean;
 }
 
 const emptyGoalDraft: GoalDraft = {
@@ -79,42 +79,34 @@ const emptyGoalDraft: GoalDraft = {
   active: true
 };
 
-export function SpecialGoals({
-  currentUser,
-  progress
-}: SpecialGoalsProps) {
+export function SpecialGoals({ currentUser, progress }: SpecialGoalsProps) {
   const isAdmin = currentUser.role === "admin";
 
   const [goals, setGoals] = useState<SpecialGoal[]>([]);
   const [goalProgress, setGoalProgress] = useState<GoalProgress[]>([]);
-  const [goalTaskRequests, setGoalTaskRequests] =
-    useState<GoalTaskRequest[]>([]);
-
+  const [goalTaskRequests, setGoalTaskRequests] = useState<GoalTaskRequest[]>([]);
   const [goalFormOpen, setGoalFormOpen] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
-  const [goalDraft, setGoalDraft] =
-    useState<GoalDraft>(emptyGoalDraft);
-
-  const [savingGoal, setSavingGoal] =
-    useState<SpecialGoal | null>(null);
+  const [goalDraft, setGoalDraft] = useState<GoalDraft>(emptyGoalDraft);
+  const [savingGoal, setSavingGoal] = useState<SpecialGoal | null>(null);
   const [contribution, setContribution] = useState(100);
 
   useEffect(() => {
     const unsubscribeGoals = onSnapshot(
       collection(db, "specialGoals"),
       (snapshot) => {
-        const nextGoals = snapshot.docs
-          .map((goalDocument) => ({
-            id: goalDocument.id,
-            ...(goalDocument.data() as Omit<SpecialGoal, "id">)
-          }))
-          .sort(
-            (a, b) =>
-              new Date(a.createdAt).getTime() -
-              new Date(b.createdAt).getTime()
-          );
-
-        setGoals(nextGoals);
+        setGoals(
+          snapshot.docs
+            .map((goalDocument) => ({
+              id: goalDocument.id,
+              ...(goalDocument.data() as Omit<SpecialGoal, "id">)
+            }))
+            .sort(
+              (a, b) =>
+                new Date(a.createdAt).getTime() -
+                new Date(b.createdAt).getTime()
+            )
+        );
       },
       () => toast.error("No se pudieron cargar las metas especiales")
     );
@@ -142,21 +134,16 @@ export function SpecialGoals({
     let unsubscribeTaskRequests = () => {};
 
     if (!isAdmin) {
-      const taskRequestsReference = query(
-        collection(db, "taskRequests"),
-        where("userId", "==", currentUser.id)
-      );
-
       unsubscribeTaskRequests = onSnapshot(
-        taskRequestsReference,
+        query(
+          collection(db, "taskRequests"),
+          where("userId", "==", currentUser.id)
+        ),
         (snapshot) => {
           setGoalTaskRequests(
             snapshot.docs.map((requestDocument) => ({
               id: requestDocument.id,
-              ...(requestDocument.data() as Omit<
-                GoalTaskRequest,
-                "id"
-              >)
+              ...(requestDocument.data() as Omit<GoalTaskRequest, "id">)
             }))
           );
         }
@@ -183,8 +170,7 @@ export function SpecialGoals({
   const userSavedForGoal = (goalId: string) =>
     goalProgress.find(
       (item) =>
-        item.goalId === goalId &&
-        item.userId === currentUser.id
+        item.goalId === goalId && item.userId === currentUser.id
     )?.savedPoints ?? 0;
 
   const openGoalForm = (goal?: SpecialGoal) => {
@@ -210,7 +196,7 @@ export function SpecialGoals({
     const targetPoints = Math.round(goalDraft.targetPoints);
 
     if (!name || targetPoints <= 0) {
-      toast.error("Completá el nombre y una meta de puntos válida");
+      toast.error("Completá el nombre y una meta de XP válida");
       return;
     }
 
@@ -224,10 +210,7 @@ export function SpecialGoals({
 
     try {
       if (editingGoalId) {
-        await updateDoc(
-          doc(db, "specialGoals", editingGoalId),
-          payload
-        );
+        await updateDoc(doc(db, "specialGoals", editingGoalId), payload);
         toast.success("Meta actualizada");
       } else {
         await addDoc(collection(db, "specialGoals"), {
@@ -259,13 +242,12 @@ export function SpecialGoals({
       await addDoc(collection(db, "specialGoals"), {
         name: "GTA VI",
         description:
-          "Ahorrar puntos para comprar GTA VI. Cada aporte queda reservado para esta meta.",
+          "Ahorrar XP disponible para comprar GTA VI. Cada aporte queda reservado para esta meta.",
         targetPoints: 8000,
         emoji: "🎮",
         active: true,
         createdAt: new Date().toISOString()
       });
-
       toast.success("Meta GTA VI creada");
     } catch {
       toast.error("No se pudo crear la meta de GTA VI");
@@ -277,40 +259,21 @@ export function SpecialGoals({
     const remaining = Math.max(goal.targetPoints - saved, 0);
 
     setSavingGoal(goal);
-    setContribution(
-      Math.min(
-        100,
-        progress.points,
-        remaining
-      )
-    );
+    setContribution(Math.min(100, progress.points, remaining));
   };
 
   const contributeToGoal = async () => {
     if (!savingGoal) return;
 
-    const requestedAmount = Math.max(
-      Math.round(contribution),
-      0
-    );
+    const requestedAmount = Math.max(Math.round(contribution), 0);
 
     if (requestedAmount <= 0) {
-      toast.error("Elegí cuántos puntos querés guardar");
+      toast.error("Elegí cuánta XP querés guardar");
       return;
     }
 
-    const progressReference = doc(
-      db,
-      "userProgress",
-      currentUser.id
-    );
-
-    const goalReference = doc(
-      db,
-      "specialGoals",
-      savingGoal.id
-    );
-
+    const progressReference = doc(db, "userProgress", currentUser.id);
+    const goalReference = doc(db, "specialGoals", savingGoal.id);
     const goalProgressReference = doc(
       db,
       "goalProgress",
@@ -318,61 +281,48 @@ export function SpecialGoals({
     );
 
     try {
+      let actualAmount = 0;
+
       await runTransaction(db, async (transaction) => {
-        const [
-          userProgressSnapshot,
-          goalSnapshot,
-          savedSnapshot
-        ] = await Promise.all([
-          transaction.get(progressReference),
-          transaction.get(goalReference),
-          transaction.get(goalProgressReference)
-        ]);
+        const [progressSnapshot, goalSnapshot, savedSnapshot] =
+          await Promise.all([
+            transaction.get(progressReference),
+            transaction.get(goalReference),
+            transaction.get(goalProgressReference)
+          ]);
 
         if (!goalSnapshot.exists()) {
           throw new Error("La meta ya no existe");
         }
 
-        const currentGoal = goalSnapshot.data() as Omit<
-          SpecialGoal,
-          "id"
-        >;
-
-        if (!currentGoal.active) {
-          throw new Error("La meta está pausada");
-        }
-
-        const availablePoints = userProgressSnapshot.exists()
-          ? Number(userProgressSnapshot.data().points ?? 0)
+        const currentGoal = goalSnapshot.data() as Omit<SpecialGoal, "id">;
+        const availableXp = progressSnapshot.exists()
+          ? Number(progressSnapshot.data().points ?? 0)
           : 0;
-
         const currentSaved = savedSnapshot.exists()
           ? Number(savedSnapshot.data().savedPoints ?? 0)
           : 0;
-
         const remaining = Math.max(
           currentGoal.targetPoints - currentSaved,
           0
         );
 
-        const amount = Math.min(
+        actualAmount = Math.min(
           requestedAmount,
-          availablePoints,
+          availableXp,
           remaining
         );
 
-        if (amount <= 0) {
-          throw new Error("No hay puntos disponibles para aportar");
+        if (actualAmount <= 0) {
+          throw new Error("No hay XP disponible para aportar");
         }
 
-        const nextSaved = currentSaved + amount;
+        const nextSaved = currentSaved + actualAmount;
         const now = new Date().toISOString();
 
         transaction.set(
           progressReference,
-          {
-            points: availablePoints - amount
-          },
+          { points: availableXp - actualAmount },
           { merge: true }
         );
 
@@ -384,23 +334,21 @@ export function SpecialGoals({
             savedPoints: nextSaved,
             updatedAt: now,
             completedAt:
-              nextSaved >= currentGoal.targetPoints
-                ? now
-                : null
+              nextSaved >= currentGoal.targetPoints ? now : null
           },
           { merge: true }
         );
       });
 
       toast.success(
-        `${requestedAmount} puntos guardados para ${savingGoal.name}`
+        `${actualAmount} XP guardada para ${savingGoal.name}`
       );
       setSavingGoal(null);
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "No se pudieron guardar los puntos"
+          : "No se pudo guardar la XP"
       );
     }
   };
@@ -427,14 +375,12 @@ export function SpecialGoals({
       return;
     }
 
-    const suggestedTaskPoints = Math.min(remaining, 100);
-
     try {
       await addDoc(collection(db, "taskRequests"), {
         userId: currentUser.id,
         rewardId: goal.id,
         rewardName: goal.name,
-        pointsNeeded: suggestedTaskPoints,
+        pointsNeeded: Math.min(remaining, 100),
         pointsAvailable: progress.points,
         requestType: "goal",
         status: "pending",
@@ -451,12 +397,10 @@ export function SpecialGoals({
     const saved = isAdmin
       ? savedForGoal(goal.id)
       : userSavedForGoal(goal.id);
-
     const percentage = Math.min(
       (saved / Math.max(goal.targetPoints, 1)) * 100,
       100
     );
-
     const remaining = Math.max(goal.targetPoints - saved, 0);
     const completed = remaining === 0;
 
@@ -477,9 +421,7 @@ export function SpecialGoals({
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/70">
                     Meta especial
                   </p>
-                  <h3 className="text-xl font-bold">
-                    {goal.name}
-                  </h3>
+                  <h3 className="text-xl font-bold">{goal.name}</h3>
                 </div>
 
                 {completed && (
@@ -502,24 +444,21 @@ export function SpecialGoals({
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-violet-600">
-                Ahorrado
+                XP guardada
               </p>
               <p className="text-xl font-bold text-[#12130F]">
-                {saved} / {goal.targetPoints} pts
+                {saved} / {goal.targetPoints} XP
               </p>
             </div>
 
             {!completed && (
               <p className="text-right text-xs font-semibold text-[#386FA4]">
-                Faltan {remaining} pts
+                Faltan {remaining} XP
               </p>
             )}
           </div>
 
-          <Progress
-            value={percentage}
-            className="mt-3 h-3 bg-violet-100"
-          />
+          <Progress value={percentage} className="mt-3 h-3 bg-violet-100" />
 
           {!isAdmin && !completed && (
             <div className="mt-4 grid gap-2">
@@ -529,7 +468,7 @@ export function SpecialGoals({
                 className="bg-violet-600 text-white hover:bg-violet-700"
               >
                 <PiggyBank className="mr-2 h-4 w-4" />
-                Guardar puntos
+                Guardar XP
               </Button>
 
               <Button
@@ -560,10 +499,9 @@ export function SpecialGoals({
               <Switch
                 checked={goal.active}
                 onCheckedChange={(checked) =>
-                  void updateDoc(
-                    doc(db, "specialGoals", goal.id),
-                    { active: checked }
-                  ).catch(() =>
+                  void updateDoc(doc(db, "specialGoals", goal.id), {
+                    active: checked
+                  }).catch(() =>
                     toast.error("No se pudo cambiar el estado")
                   )
                 }
@@ -586,7 +524,8 @@ export function SpecialGoals({
             Metas especiales
           </h2>
           <p className="mt-1 text-sm text-[#386FA4]">
-            Los puntos que Marti aporta quedan reservados y dejan de estar disponibles en la tienda.
+            La XP que Marti guarda deja de estar disponible para la tienda,
+            pero no pierde su XP acumulada ni su nivel.
           </p>
         </div>
 
@@ -605,135 +544,28 @@ export function SpecialGoals({
             onClick={() => void createGtaGoal()}
           >
             <Gamepad2 className="mr-2 h-4 w-4" />
-            Crear GTA VI · 8000 pts
+            Crear GTA VI · 8000 XP
           </Button>
         </div>
 
         <div className="space-y-3">
           {goals.map(renderGoalCard)}
-
-          {goals.length === 0 && (
-            <Card className="border-2 border-dashed border-violet-200 bg-white/70 p-6 text-center">
-              <Target className="mx-auto mb-2 h-8 w-8 text-violet-600" />
-              <p className="font-bold text-[#12130F]">
-                Todavía no hay metas especiales
-              </p>
-              <p className="mt-1 text-sm text-[#386FA4]">
-                Podés arrancar creando GTA VI.
-              </p>
-            </Card>
-          )}
         </div>
 
         {goalFormOpen && (
-          <div className="fixed inset-0 z-[160] flex items-center justify-center overflow-y-auto bg-black/55 px-5 py-8">
-            <Card className="w-full max-w-md bg-white p-5">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-bold text-[#12130F]">
-                  {editingGoalId ? "Editar meta" : "Nueva meta"}
-                </h3>
-
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setGoalFormOpen(false)}
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-[72px_1fr] gap-2">
-                  <Input
-                    value={goalDraft.emoji}
-                    onChange={(event) =>
-                      setGoalDraft((previous) => ({
-                        ...previous,
-                        emoji: event.target.value
-                      }))
-                    }
-                    placeholder="🎯"
-                  />
-
-                  <Input
-                    value={goalDraft.name}
-                    onChange={(event) =>
-                      setGoalDraft((previous) => ({
-                        ...previous,
-                        name: event.target.value
-                      }))
-                    }
-                    placeholder="Nombre de la meta"
-                  />
-                </div>
-
-                <Textarea
-                  value={goalDraft.description}
-                  onChange={(event) =>
-                    setGoalDraft((previous) => ({
-                      ...previous,
-                      description: event.target.value
-                    }))
-                  }
-                  placeholder="Descripción opcional"
-                />
-
-                <div>
-                  <p className="mb-1 text-xs font-semibold text-[#386FA4]">
-                    Objetivo en puntos
-                  </p>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={goalDraft.targetPoints}
-                    onChange={(event) =>
-                      setGoalDraft((previous) => ({
-                        ...previous,
-                        targetPoints: Number(event.target.value)
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl bg-[#E2DADB]/60 p-3">
-                  <div>
-                    <p className="font-semibold text-[#12130F]">
-                      Meta activa
-                    </p>
-                    <p className="text-xs text-[#386FA4]">
-                      Marti puede verla y aportar.
-                    </p>
-                  </div>
-
-                  <Switch
-                    checked={goalDraft.active}
-                    onCheckedChange={(checked) =>
-                      setGoalDraft((previous) => ({
-                        ...previous,
-                        active: checked
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <Button
-                onClick={() => void saveGoal()}
-                className="mt-4 w-full bg-violet-600 text-white hover:bg-violet-700"
-              >
-                <Check className="mr-2 h-4 w-4" />
-                Guardar meta
-              </Button>
-            </Card>
-          </div>
+          <GoalForm
+            draft={goalDraft}
+            editing={Boolean(editingGoalId)}
+            onChange={setGoalDraft}
+            onClose={() => setGoalFormOpen(false)}
+            onSave={() => void saveGoal()}
+          />
         )}
       </section>
     );
   }
 
-  if (activeGoals.length === 0) {
-    return null;
-  }
+  if (activeGoals.length === 0) return null;
 
   return (
     <section className="space-y-3">
@@ -744,14 +576,12 @@ export function SpecialGoals({
             Metas especiales
           </h2>
           <p className="text-xs text-[#386FA4]">
-            Ahorrá puntos para premios grandes.
+            Guardá XP disponible para premios grandes.
           </p>
         </div>
       </div>
 
-      <div className="space-y-3">
-        {activeGoals.map(renderGoalCard)}
-      </div>
+      <div className="space-y-3">{activeGoals.map(renderGoalCard)}</div>
 
       {savingGoal && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/55 px-5">
@@ -776,20 +606,18 @@ export function SpecialGoals({
             </div>
 
             <div className="mt-4 rounded-2xl bg-violet-50 p-4">
-              <p className="text-xs text-violet-600">
-                Tenés disponibles
-              </p>
+              <p className="text-xs text-violet-600">XP disponible</p>
               <p className="text-2xl font-bold text-violet-950">
-                {progress.points} pts
+                {progress.points} XP
               </p>
               <p className="mt-1 text-xs text-violet-700">
-                Los puntos que guardes dejan de estar disponibles para canjes normales.
+                Guardarla no reduce tu XP acumulada ni tu nivel.
               </p>
             </div>
 
             <div className="mt-4">
               <p className="mb-1 text-xs font-semibold text-[#386FA4]">
-                ¿Cuántos querés guardar?
+                ¿Cuánta XP querés guardar?
               </p>
               <Input
                 type="number"
@@ -823,11 +651,107 @@ export function SpecialGoals({
               className="mt-4 w-full bg-violet-600 text-white hover:bg-violet-700"
             >
               <PiggyBank className="mr-2 h-4 w-4" />
-              Guardar {Math.max(Math.round(contribution), 0)} pts
+              Guardar {Math.max(Math.round(contribution), 0)} XP
             </Button>
           </Card>
         </div>
       )}
     </section>
+  );
+}
+
+function GoalForm({
+  draft,
+  editing,
+  onChange,
+  onClose,
+  onSave
+}: {
+  draft: GoalDraft;
+  editing: boolean;
+  onChange: (draft: GoalDraft) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[160] flex items-center justify-center overflow-y-auto bg-black/55 px-5 py-8">
+      <Card className="w-full max-w-md bg-white p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-bold text-[#12130F]">
+            {editing ? "Editar meta" : "Nueva meta"}
+          </h3>
+          <Button size="icon" variant="ghost" onClick={onClose}>
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-[72px_1fr] gap-2">
+            <Input
+              value={draft.emoji}
+              onChange={(event) =>
+                onChange({ ...draft, emoji: event.target.value })
+              }
+              placeholder="🎯"
+            />
+            <Input
+              value={draft.name}
+              onChange={(event) =>
+                onChange({ ...draft, name: event.target.value })
+              }
+              placeholder="Nombre de la meta"
+            />
+          </div>
+
+          <Textarea
+            value={draft.description}
+            onChange={(event) =>
+              onChange({ ...draft, description: event.target.value })
+            }
+            placeholder="Descripción opcional"
+          />
+
+          <div>
+            <p className="mb-1 text-xs font-semibold text-[#386FA4]">
+              Objetivo en XP
+            </p>
+            <Input
+              type="number"
+              min={1}
+              value={draft.targetPoints}
+              onChange={(event) =>
+                onChange({
+                  ...draft,
+                  targetPoints: Number(event.target.value)
+                })
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl bg-[#E2DADB]/60 p-3">
+            <div>
+              <p className="font-semibold text-[#12130F]">Meta activa</p>
+              <p className="text-xs text-[#386FA4]">
+                Marti puede verla y aportar XP.
+              </p>
+            </div>
+            <Switch
+              checked={draft.active}
+              onCheckedChange={(checked) =>
+                onChange({ ...draft, active: checked })
+              }
+            />
+          </div>
+        </div>
+
+        <Button
+          onClick={onSave}
+          className="mt-4 w-full bg-violet-600 text-white hover:bg-violet-700"
+        >
+          <Check className="mr-2 h-4 w-4" />
+          Guardar meta
+        </Button>
+      </Card>
+    </div>
   );
 }

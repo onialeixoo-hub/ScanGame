@@ -263,7 +263,7 @@ export function Tasks({
           title: task.title,
           description: task.description ?? "",
           points: task.points,
-          xp: task.xp,
+          xp: task.points,
           frequency: task.frequency,
           active: task.active,
           priority: resolveTaskPriority(
@@ -298,7 +298,7 @@ export function Tasks({
       ...taskForm,
       title: taskForm.title.trim(),
       points: Math.max(Math.round(taskForm.points), 1),
-      xp: Math.max(Math.round(taskForm.xp), 1),
+      xp: Math.max(Math.round(taskForm.points), 1),
       priority: getPriorityFromPoints(taskForm.points)
     } as Omit<Task, "id">;
 
@@ -344,7 +344,11 @@ export function Tasks({
         taskRequestsSnapshot,
         goalProgressSnapshot,
         productsSnapshot,
-        scansSnapshot
+        scansSnapshot,
+        achievementsSnapshot,
+        xpLedgerSnapshot,
+        receivedNotificationsSnapshot,
+        sentNotificationsSnapshot
       ] = await Promise.all([
         getDocs(
           query(
@@ -375,17 +379,46 @@ export function Tasks({
         ),
         getDocs(
           collection(db, "users", trackedUser.id, "scans")
+        ),
+        getDocs(
+          collection(db, "users", trackedUser.id, "achievements")
+        ),
+        getDocs(
+          collection(db, "users", trackedUser.id, "xpLedger")
+        ),
+        getDocs(
+          query(
+            collection(db, "notifications"),
+            where("recipientId", "==", trackedUser.id)
+          )
+        ),
+        getDocs(
+          query(
+            collection(db, "notifications"),
+            where("senderId", "==", trackedUser.id)
+          )
         )
       ]);
 
-      const documentsToDelete = [
-        ...claimsSnapshot.docs,
-        ...rewardRequestsSnapshot.docs,
-        ...taskRequestsSnapshot.docs,
-        ...goalProgressSnapshot.docs,
-        ...productsSnapshot.docs,
-        ...scansSnapshot.docs
-      ];
+      const documentsToDelete = Array.from(
+        new Map(
+          [
+            ...claimsSnapshot.docs,
+            ...rewardRequestsSnapshot.docs,
+            ...taskRequestsSnapshot.docs,
+            ...goalProgressSnapshot.docs,
+            ...productsSnapshot.docs,
+            ...scansSnapshot.docs,
+            ...achievementsSnapshot.docs,
+            ...xpLedgerSnapshot.docs,
+            ...receivedNotificationsSnapshot.docs,
+            ...sentNotificationsSnapshot.docs
+          ].map((documentSnapshot) => [
+            documentSnapshot.ref.path,
+            documentSnapshot
+          ])
+        ).values()
+      );
 
       await deleteReferencesInBatches(documentsToDelete);
 
@@ -476,7 +509,7 @@ export function Tasks({
 
             <Badge className="border-0 bg-white/20 text-white">
               <Crown className="mr-1 h-3 w-3" />
-              Puntos: {progress.points}
+              XP disponibles: {progress.points}
             </Badge>
           </div>
         )}
@@ -571,11 +604,7 @@ export function Tasks({
 
                         <div className="flex flex-wrap gap-2">
                           <Badge className="border-0 bg-blue-100 text-blue-700">
-                            +{task.points} pts
-                          </Badge>
-
-                          <Badge className="border-0 bg-purple-100 text-purple-700">
-                            +{task.xp} XP
+                            +{task.points} XP
                           </Badge>
 
                           <Badge className="border-0 bg-slate-100 text-slate-700">
@@ -862,7 +891,7 @@ export function Tasks({
                       )}
 
                       <p className="mt-2 text-xs text-slate-500">
-                        {task.points} pts · {task.xp} XP ·{" "}
+                        {task.points} XP ·{" "}
                         {frequencyLabels[task.frequency]}
                       </p>
                     </div>
@@ -917,7 +946,7 @@ export function Tasks({
                 </p>
 
                 <p className="text-xl font-bold">
-                  {progress.points} puntos
+                  {progress.points} XP disponibles
                 </p>
               </div>
             </div>
@@ -958,7 +987,7 @@ export function Tasks({
               </p>
 
               <p className="mt-1 text-xs text-red-600">
-                Borra XP, puntos, rachas, historial de tareas,
+                Borra XP, XP disponibles, rachas, historial de tareas,
                 productos, escaneos, pedidos y progreso de metas.
                 La cuenta y el perfil se conservan.
               </p>
@@ -1056,7 +1085,7 @@ export function Tasks({
                   "¿Rechazar esta tarea?"}
 
                 {adminAction.type === "reset" &&
-                  "Se borrarán todos los datos de juego de Marti: XP, puntos, rachas, tareas completadas, colección, escaneos, pedidos y progreso de metas. Su cuenta, nombre y avatar se conservarán. Esta acción no se puede deshacer."}
+                  "Se borrarán todos los datos de juego de Marti: XP acumulada, XP disponible, rachas, tareas completadas, colección, escaneos, pedidos y progreso de metas. Su cuenta, nombre y avatar se conservarán. Esta acción no se puede deshacer."}
               </p>
 
               {adminAction.type === "reject" && (
@@ -1175,7 +1204,7 @@ export function Tasks({
                                 ({
                                   ...prev,
                                   points: config.points,
-                                  xp: config.xp,
+                                  xp: config.points,
                                   priority
                                 }) as Omit<Task, "id">
                             )
@@ -1188,29 +1217,22 @@ export function Tasks({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="mb-1 text-xs font-semibold text-[#386FA4]">
+                    Recompensa en XP
+                  </p>
                   <Input
                     type="number"
                     min={1}
                     value={taskForm.points}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const xp = Number(event.target.value);
                       setTaskForm((prev) => ({
                         ...prev,
-                        points: Number(event.target.value)
-                      }))
-                    }
-                  />
-
-                  <Input
-                    type="number"
-                    min={1}
-                    value={taskForm.xp}
-                    onChange={(event) =>
-                      setTaskForm((prev) => ({
-                        ...prev,
-                        xp: Number(event.target.value)
-                      }))
-                    }
+                        points: xp,
+                        xp
+                      }));
+                    }}
                   />
                 </div>
 

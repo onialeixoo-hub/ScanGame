@@ -1,10 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import {
-  LogOut,
-  ShieldCheck,
-  UserRound,
-  XCircle
-} from "lucide-react";
+import { LogOut, ShieldCheck, UserRound, XCircle } from "lucide-react";
 
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
@@ -42,11 +37,7 @@ export function AccountMenu({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <div
-            className="flex-1 bg-black/45"
-            onClick={onClose}
-            aria-hidden="true"
-          />
+          <div className="flex-1 bg-black/45" onClick={onClose} aria-hidden="true" />
 
           <motion.aside
             className="flex h-full w-[84%] max-w-xs flex-col bg-gradient-to-b from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-2xl"
@@ -100,7 +91,7 @@ export function AccountMenu({
                   <div>
                     <p className="font-bold">Modo administrador</p>
                     <p className="text-sm text-[#386FA4]">
-                      Podés gestionar tareas y aprobaciones.
+                      Podés gestionar tareas, tienda y notificaciones de Marti.
                     </p>
                   </div>
                 </div>
@@ -108,13 +99,13 @@ export function AccountMenu({
             ) : (
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Card className="bg-white/95 p-3 text-[#12130F]">
-                  <p className="text-xs text-[#386FA4]">Puntos</p>
+                  <p className="text-xs text-[#386FA4]">XP disponibles</p>
                   <p className="text-lg font-bold">{progress.points}</p>
                 </Card>
 
                 <Card className="bg-white/95 p-3 text-[#12130F]">
-                  <p className="text-xs text-[#386FA4]">Racha</p>
-                  <p className="text-lg font-bold">{progress.streak} días</p>
+                  <p className="text-xs text-[#386FA4]">XP acumulada</p>
+                  <p className="text-lg font-bold">{progress.xp}</p>
                 </Card>
 
                 <Card className="bg-white/95 p-3 text-[#12130F]">

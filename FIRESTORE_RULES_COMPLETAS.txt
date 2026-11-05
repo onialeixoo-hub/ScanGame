@@ -1,0 +1,177 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && get(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.role == "admin";
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly(["name", "avatar", "notificationPrefs"]);
+
+      allow create, delete: if false;
+
+      match /products/{productId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /scans/{scanId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update: if false;
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /achievements/{achievementId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+
+      match /xpLedger/{entryId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /userProgress/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /taskClaims/{claimId} {
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == "pending";
+
+      allow update, delete: if isAdmin();
+    }
+
+    match /storeCategories/{categoryId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /storeRewards/{rewardId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /rewardRequests/{requestId} {
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if isAdmin();
+    }
+
+    match /taskRequests/{requestId} {
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if isAdmin();
+    }
+
+    match /specialGoals/{goalId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /goalProgress/{progressId} {
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.recipientId == request.auth.uid
+        );
+
+      allow create: if signedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.recipientId is string;
+
+      allow update: if signedIn()
+        && resource.data.recipientId == request.auth.uid
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly(["read"]);
+
+      allow delete: if isAdmin();
+    }
+
+    match /pushTokens/{tokenId} {
+      allow read: if signedIn()
+        && resource.data.userId == request.auth.uid;
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}

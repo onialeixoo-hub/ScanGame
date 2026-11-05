@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { Coins, Home, Plus, RefreshCw, Sparkles, Star } from "lucide-react";
+import { Home, Plus, RefreshCw, Sparkles, Star } from "lucide-react";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
-import { rarityBasePoints } from "@/app/lib/products";
 import type { ProductRarity } from "@/app/types";
 
 interface ScanResultProps {
@@ -48,7 +47,6 @@ export function ScanResult({
   const [customName, setCustomName] = useState(unknownProduct ? "" : product.name);
   const cleanCustomName = customName.trim();
   const displayName = cleanCustomName || product.name || `Producto ${product.barcode}`;
-  const points = product.isDuplicateToday ? 0 : rarityBasePoints[product.rarity];
   const canAdd = !product.isDuplicateToday && (!unknownProduct || cleanCustomName.length > 0);
 
   const addProduct = () => {
@@ -102,7 +100,7 @@ export function ScanResult({
           <Badge className="bg-slate-100 text-slate-700">{product.appCategory}</Badge>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mt-4 grid grid-cols-2 gap-2">
           <Card className="border-amber-200 bg-amber-50 p-3">
             <Sparkles className="h-4 w-4 text-amber-500" />
             <p className="mt-1 text-xs font-semibold text-amber-700">XP base</p>
@@ -110,13 +108,8 @@ export function ScanResult({
           </Card>
           <Card className="border-blue-200 bg-blue-50 p-3">
             <Star className="h-4 w-4 text-blue-500" />
-            <p className="mt-1 text-xs font-semibold text-blue-700">XP total</p>
+            <p className="mt-1 text-xs font-semibold text-blue-700">XP que ganás</p>
             <p className="text-xl font-bold text-blue-900">{product.xpReward}</p>
-          </Card>
-          <Card className="border-emerald-200 bg-emerald-50 p-3">
-            <Coins className="h-4 w-4 text-emerald-600" />
-            <p className="mt-1 text-xs font-semibold text-emerald-700">Puntos</p>
-            <p className="text-xl font-bold text-emerald-900">+{points}</p>
           </Card>
         </div>
 

@@ -429,7 +429,7 @@ export function Store({ currentUser, progress }: StoreProps) {
         if (!requestSnapshot.exists()) throw new Error("Solicitud inexistente");
         const data = requestSnapshot.data() as RewardRequest;
         const currentPoints = progressSnapshot.exists() ? Number(progressSnapshot.data().points ?? 0) : 0;
-        if (currentPoints < data.cost) throw new Error("Puntos insuficientes");
+        if (currentPoints < data.cost) throw new Error("XP insuficiente");
 
         transaction.set(progressReference, { points: currentPoints - data.cost }, { merge: true });
         transaction.update(requestReference, { status: "approved", approvedAt: new Date().toISOString() });
@@ -463,9 +463,9 @@ export function Store({ currentUser, progress }: StoreProps) {
         ? request.customNote
           ? `Pedido de Marti: ${request.rewardName}. Nota: ${request.customNote}`
           : `Pedido de Marti: ${request.rewardName}.`
-        : `Objetivo: sumar puntos para ${request.rewardName}.`,
+        : `Objetivo: sumar XP para ${request.rewardName}.`,
       points,
-      xp: Math.max(Math.round(points / 2), 15),
+      xp: points,
       priority
     });
   };
@@ -477,7 +477,7 @@ export function Store({ currentUser, progress }: StoreProps) {
         title: taskDraft.title.trim(),
         description: taskDraft.description.trim(),
         points: Math.max(Math.round(taskDraft.points), 1),
-        xp: Math.max(Math.round(taskDraft.xp), 1),
+        xp: Math.max(Math.round(taskDraft.points), 1),
         frequency: "once",
         active: true,
         priority: taskDraft.priority
@@ -521,7 +521,7 @@ export function Store({ currentUser, progress }: StoreProps) {
             </div>
             <div className="rounded-2xl bg-white/15 px-3 py-2 text-right">
               <p className="text-[11px] text-white/75">Disponibles</p>
-              <p className="text-lg font-bold">{progress.points} pts</p>
+              <p className="text-lg font-bold">{progress.points} XP</p>
             </div>
           </div>
         </div>
@@ -598,7 +598,7 @@ export function Store({ currentUser, progress }: StoreProps) {
                                 <Button disabled className="w-full">Pedido de tarea enviado</Button>
                               ) : (
                                 <>
-                                  <p className="mb-2 text-xs text-red-600">Te faltan {missing} puntos</p>
+                                  <p className="mb-2 text-xs text-red-600">Te faltan {missing} XP</p>
                                   <Button variant="outline" className="w-full" onClick={() => void requestTaskForReward(reward)}>Pedir una tarea para conseguirlo</Button>
                                 </>
                               )}
@@ -681,7 +681,7 @@ export function Store({ currentUser, progress }: StoreProps) {
             {pendingRewardRequests.map((request) => (
               <Card key={request.id} className="bg-white p-4">
                 <p className="font-bold">{request.rewardName}</p>
-                <p className="text-sm text-[#386FA4]">{request.cost} puntos</p>
+                <p className="text-sm text-[#386FA4]">{request.cost} XP</p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button onClick={() => void approveRewardRequest(request)}>Aprobar</Button>
                   <Button variant="outline" onClick={() => void rejectRewardRequest(request)}>Rechazar</Button>
@@ -706,7 +706,7 @@ export function Store({ currentUser, progress }: StoreProps) {
                 ) : (
                   <>
                     <p className="font-bold">Quiere conseguir: {request.rewardName}</p>
-                    <p className="text-sm text-[#386FA4]">Le faltan {request.pointsNeeded} puntos</p>
+                    <p className="text-sm text-[#386FA4]">Le faltan {request.pointsNeeded} XP</p>
                   </>
                 )}
                 <div className="mt-3 grid grid-cols-2 gap-2">
@@ -724,7 +724,7 @@ export function Store({ currentUser, progress }: StoreProps) {
             {rewards.map((reward) => (
               <Card key={reward.id} className="bg-white p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div><p className="font-bold">{reward.emoji} {reward.name}</p><p className="text-sm text-[#386FA4]">{reward.cost} pts</p></div>
+                  <div><p className="font-bold">{reward.emoji} {reward.name}</p><p className="text-sm text-[#386FA4]">{reward.cost} XP</p></div>
                   <Switch checked={reward.active} onCheckedChange={(checked) => void updateDoc(doc(db, "storeRewards", reward.id), { active: checked })} />
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -810,15 +810,27 @@ export function Store({ currentUser, progress }: StoreProps) {
               {(Object.keys(TASK_PRIORITY_CONFIG) as TaskPriority[]).map((priority) => {
                 const config = TASK_PRIORITY_CONFIG[priority];
                 return (
-                  <button key={priority} className={`rounded-xl border p-2 text-[10px] font-bold ${config.buttonClass}`} onClick={() => setTaskDraft((previous) => ({ ...previous, priority, points: config.points, xp: config.xp }))}>
+                  <button key={priority} className={`rounded-xl border p-2 text-[10px] font-bold ${config.buttonClass}`} onClick={() => setTaskDraft((previous) => ({ ...previous, priority, points: config.points, xp: config.points }))}>
                     {config.shortLabel}
                   </button>
                 );
               })}
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Input type="number" value={taskDraft.points} onChange={(event) => { const points = Number(event.target.value); setTaskDraft((previous) => ({ ...previous, points, priority: getPriorityFromPoints(points) as TaskPriority })); }} />
-              <Input type="number" value={taskDraft.xp} onChange={(event) => setTaskDraft((previous) => ({ ...previous, xp: Number(event.target.value) }))} />
+            <div className="mt-3">
+              <p className="mb-1 text-xs font-semibold text-[#386FA4]">Recompensa en XP</p>
+              <Input
+                type="number"
+                value={taskDraft.points}
+                onChange={(event) => {
+                  const xp = Number(event.target.value);
+                  setTaskDraft((previous) => ({
+                    ...previous,
+                    points: xp,
+                    xp,
+                    priority: getPriorityFromPoints(xp) as TaskPriority
+                  }));
+                }}
+              />
             </div>
             <div className="mt-4 flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => setTaskRequestBeingResolved(null)}>Cancelar</Button>

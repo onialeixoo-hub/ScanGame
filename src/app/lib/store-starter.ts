@@ -9,7 +9,7 @@ const STARTER_CATALOG = [
   {
     category: {
       name: "Bebidas",
-      description: "Bebidas para canjear con puntos.",
+      description: "Bebidas para canjear con XP.",
       order: 0
     },
     rewards: [
@@ -21,7 +21,6 @@ const STARTER_CATALOG = [
       }
     ]
   },
-
   {
     category: {
       name: "Snacks",
@@ -49,7 +48,6 @@ const STARTER_CATALOG = [
       }
     ]
   },
-
   {
     category: {
       name: "Comidas",
@@ -71,109 +69,64 @@ let seedRunning = false;
 
 export async function seedStarterStore() {
   if (seedRunning) return;
-
   seedRunning = true;
 
   try {
-    const categoriesSnapshot =
-      await getDocs(
-        collection(db, "storeCategories")
-      );
-
-    const rewardsSnapshot =
-      await getDocs(
-        collection(db, "storeRewards")
-      );
+    const categoriesSnapshot = await getDocs(
+      collection(db, "storeCategories")
+    );
+    const rewardsSnapshot = await getDocs(
+      collection(db, "storeRewards")
+    );
 
     const existingCategories = new Map(
-      categoriesSnapshot.docs.map(
-        (document) => [
-          String(document.data().name)
-            .trim()
-            .toLowerCase(),
-          document.id
-        ]
-      )
+      categoriesSnapshot.docs.map((document) => [
+        String(document.data().name).trim().toLowerCase(),
+        document.id
+      ])
     );
 
     const existingRewards = new Set(
-      rewardsSnapshot.docs.map(
-        (document) =>
-          String(document.data().name)
-            .trim()
-            .toLowerCase()
+      rewardsSnapshot.docs.map((document) =>
+        String(document.data().name).trim().toLowerCase()
       )
     );
 
     for (const group of STARTER_CATALOG) {
-      const categoryKey =
-        group.category.name.toLowerCase();
-
-      let categoryId =
-        existingCategories.get(categoryKey);
+      const categoryKey = group.category.name.toLowerCase();
+      let categoryId = existingCategories.get(categoryKey);
 
       if (!categoryId) {
-        const categoryReference =
-          await addDoc(
-            collection(
-              db,
-              "storeCategories"
-            ),
-            {
-              name: group.category.name,
-              description:
-                group.category.description,
-              order: group.category.order,
-              active: true,
-              createdAt:
-                new Date().toISOString()
-            }
-          );
-
-        categoryId =
-          categoryReference.id;
-
-        existingCategories.set(
-          categoryKey,
-          categoryId
-        );
-      }
-
-      for (
-        const reward of group.rewards
-      ) {
-        const rewardKey =
-          reward.name.toLowerCase();
-
-        if (
-          existingRewards.has(
-            rewardKey
-          )
-        ) {
-          continue;
-        }
-
-        await addDoc(
-          collection(
-            db,
-            "storeRewards"
-          ),
+        const categoryReference = await addDoc(
+          collection(db, "storeCategories"),
           {
-            name: reward.name,
-            description:
-              reward.description,
-            categoryId,
-            cost: reward.cost,
-            emoji: reward.emoji,
+            name: group.category.name,
+            description: group.category.description,
+            order: group.category.order,
             active: true,
-            createdAt:
-              new Date().toISOString()
+            createdAt: new Date().toISOString()
           }
         );
 
-        existingRewards.add(
-          rewardKey
-        );
+        categoryId = categoryReference.id;
+        existingCategories.set(categoryKey, categoryId);
+      }
+
+      for (const reward of group.rewards) {
+        const rewardKey = reward.name.toLowerCase();
+        if (existingRewards.has(rewardKey)) continue;
+
+        await addDoc(collection(db, "storeRewards"), {
+          name: reward.name,
+          description: reward.description,
+          categoryId,
+          cost: reward.cost,
+          emoji: reward.emoji,
+          active: true,
+          createdAt: new Date().toISOString()
+        });
+
+        existingRewards.add(rewardKey);
       }
     }
   } finally {
