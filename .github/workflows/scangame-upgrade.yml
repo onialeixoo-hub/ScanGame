@@ -1,4 +1,4 @@
-name: Reparar ScanGame Upgrade
+name: Aplicar ScanGame Upgrade
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  repair:
+  upgrade:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,52 +20,84 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Recuperar upgrade original y corregir npm
+      - name: Recuperar archivos del upgrade original
         shell: bash
         run: |
           python <<'PY'
           import subprocess
+          import textwrap
           from pathlib import Path
 
-          path = ".github/workflows/scangame-upgrade.yml"
-
-          original_commit = "a0d008e27b68ea9de5698cb50503fb833ecc1710"
+          commit = "a0d008e27b68ea9de5698cb50503fb833ecc1710"
+          workflow_path = ".github/workflows/scangame-upgrade.yml"
 
           original = subprocess.check_output(
-              [
-                  "git",
-                  "show",
-                  f"{original_commit}:{path}"
-              ],
+              ["git", "show", f"{commit}:{workflow_path}"],
               text=True
           )
 
-          if "npm ci" not in original:
+          start_marker = "      - name: Write complete ScanGame upgrade files"
+          end_marker = "      - name: Install dependencies"
+
+          start = original.find(start_marker)
+          end = original.find(end_marker, start)
+
+          if start == -1 or end == -1:
               raise SystemExit(
-                  "No encontré npm ci en el workflow original"
+                  "No pude encontrar el bloque original del upgrade."
               )
 
-          corrected = original.replace(
-              "npm ci",
-              "npm install --no-audit --no-fund"
-          )
+          section = original[start:end]
 
-          Path(path).write_text(
-              corrected,
+          run_marker = "        run: |\n"
+          run_position = section.find(run_marker)
+
+          if run_position == -1:
+              raise SystemExit(
+                  "No pude encontrar el script del upgrade."
+              )
+
+          script = section[
+              run_position + len(run_marker):
+          ]
+
+          script = textwrap.dedent(script)
+
+          output = Path("/tmp/scangame-upgrade.sh")
+          output.write_text(
+              script,
               encoding="utf-8"
           )
 
           print(
-              "Workflow original recuperado y corregido correctamente."
+              "Upgrade original recuperado correctamente."
           )
           PY
 
-      - name: Guardar workflow corregido
+          bash /tmp/scangame-upgrade.sh
+
+      - name: Instalar dependencias
+        shell: bash
+        run: |
+          npm install --no-audit --no-fund
+
+      - name: Probar compilación
+        shell: bash
+        run: |
+          npm run build
+
+      - name: Guardar actualización de ScanGame
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add .github/workflows/scangame-upgrade.yml
-          git commit -m "Restore ScanGame upgrade with npm install"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios para guardar."
+            exit 0
+          fi
+
+          git commit -m "Add XP achievements notifications reminders and PWA"
           git push
