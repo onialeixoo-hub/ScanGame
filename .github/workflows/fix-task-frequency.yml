@@ -1,0 +1,297 @@
+name: Fix tareas por frecuencia
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/fix-task-frequency.yml
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Corregir tareas diarias y semanales
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          # =========================
+          # APP.TSX
+          # =========================
+
+          app_path = Path("src/app/App.tsx")
+          app = app_path.read_text(encoding="utf-8")
+
+          old_app = '''  const homeTasks = tasks.map((task) => {
+            const latestClaim = currentUserClaims
+              .filter((claim) => claim.taskId === task.id)
+              .sort(
+                (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+              )[0];
+            const isCompleted = latestClaim?.status === "approved";
+
+            return {
+              id: task.id,
+              title: task.title,
+              xpReward: task.xp,
+              pointsReward: task.points,
+              priority: task.priority,
+              completed: isCompleted
+            };
+          });'''
+
+          new_app = '''  const startOfCurrentWeekForHome = (() => {
+            const date = new Date();
+            const day = date.getDay();
+
+            date.setHours(0, 0, 0, 0);
+            date.setDate(
+              date.getDate() -
+                (day === 0 ? 6 : day - 1)
+            );
+
+            return date;
+          })();
+
+          const homeTasks = tasks
+            .filter((task) => task.active)
+            .map((task) => {
+              const relevantClaims =
+                currentUserClaims.filter(
+                  (claim) => {
+                    if (
+                      claim.taskId !== task.id
+                    ) {
+                      return false;
+                    }
+
+                    const claimDate =
+                      new Date(
+                        claim.timestamp
+                      );
+
+                    if (
+                      task.frequency ===
+                      "daily"
+                    ) {
+                      return (
+                        claimDate.toDateString() ===
+                        todayKey
+                      );
+                    }
+
+                    if (
+                      task.frequency ===
+                      "weekly"
+                    ) {
+                      return (
+                        claimDate.getTime() >=
+                        startOfCurrentWeekForHome.getTime()
+                      );
+                    }
+
+                    return true;
+                  }
+                );
+
+              const latestClaim =
+                relevantClaims.sort(
+                  (a, b) =>
+                    new Date(
+                      b.rejectedAt ??
+                        b.approvedAt ??
+                        b.timestamp
+                    ).getTime() -
+                    new Date(
+                      a.rejectedAt ??
+                        a.approvedAt ??
+                        a.timestamp
+                    ).getTime()
+                )[0];
+
+              const isCompleted =
+                latestClaim?.status ===
+                "approved";
+
+              return {
+                id: task.id,
+                title: task.title,
+                xpReward: task.xp,
+                pointsReward: task.points,
+                priority: task.priority,
+                completed: isCompleted
+              };
+            });'''
+
+          if old_app not in app:
+              raise SystemExit(
+                  "No encontré homeTasks en App.tsx"
+              )
+
+          app = app.replace(
+              old_app,
+              new_app
+          )
+
+          app_path.write_text(
+              app,
+              encoding="utf-8"
+          )
+
+          # =========================
+          # TASKS.TSX
+          # =========================
+
+          tasks_path = Path(
+              "src/app/components/Tasks.tsx"
+          )
+
+          tasks = tasks_path.read_text(
+              encoding="utf-8"
+          )
+
+          old_tasks = '''  const getLatestClaimForTask = (task: Task) => {
+            const relevantClaims = trackedUserClaims.filter((claim) => {
+              if (claim.taskId !== task.id) return false;
+
+              if (task.frequency === "daily") {
+                return new Date(claim.timestamp).toDateString() === todayKey;
+              }
+
+              return true;
+            });
+
+            return relevantClaims.sort(
+              (a, b) =>
+                new Date(
+                  b.rejectedAt ?? b.approvedAt ?? b.timestamp
+                ).getTime() -
+                new Date(
+                  a.rejectedAt ?? a.approvedAt ?? a.timestamp
+                ).getTime()
+            )[0];
+          };'''
+
+          new_tasks = '''  const getLatestClaimForTask = (task: Task) => {
+            const relevantClaims = trackedUserClaims.filter((claim) => {
+              if (claim.taskId !== task.id) return false;
+
+              const claimDate = new Date(claim.timestamp);
+
+              if (task.frequency === "daily") {
+                return claimDate.toDateString() === todayKey;
+              }
+
+              if (task.frequency === "weekly") {
+                return (
+                  claimDate.getTime() >=
+                  startOfCurrentWeek.getTime()
+                );
+              }
+
+              return true;
+            });
+
+            return relevantClaims.sort(
+              (a, b) =>
+                new Date(
+                  b.rejectedAt ?? b.approvedAt ?? b.timestamp
+                ).getTime() -
+                new Date(
+                  a.rejectedAt ?? a.approvedAt ?? a.timestamp
+                ).getTime()
+            )[0];
+          };'''
+
+          if old_tasks not in tasks:
+              raise SystemExit(
+                  "No encontré getLatestClaimForTask en Tasks.tsx"
+              )
+
+          tasks = tasks.replace(
+              old_tasks,
+              new_tasks
+          )
+
+          tasks_path.write_text(
+              tasks,
+              encoding="utf-8"
+          )
+
+          print(
+              "Lógica de tareas corregida."
+          )
+          PY
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Comprobar compilación
+        run: npm run build
+
+      - name: Guardar corrección
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            src/app/App.tsx \
+            src/app/components/Tasks.tsx
+
+          git commit -m "Fix daily and weekly task reset logic"
+          git push
+
+      - name: Esperar deploy anterior
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in {1..60}; do
+
+            STATUS=$(curl -s \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}" \
+              | jq -r '
+                .workflow_runs[]
+                | select(.name == "Deploy to GitHub Pages")
+                | .status
+              ' \
+              | head -1)
+
+            if [ "$STATUS" = "completed" ] || [ -z "$STATUS" ]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+      - name: Subir versión corregida
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy:
+    needs: fix
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Publicar GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
