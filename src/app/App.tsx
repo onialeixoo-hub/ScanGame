@@ -1385,13 +1385,66 @@ export default function App() {
       new Date(claim.approvedAt).toDateString() === todayKey
   ).length;
 
-  const homeTasks = tasks.map((task) => {
-    const latestClaim = currentUserClaims
-      .filter((claim) => claim.taskId === task.id)
-      .sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  const startOfCurrentWeekForHome = (() => {
+  const date = new Date();
+  const day = date.getDay();
+
+  date.setHours(0, 0, 0, 0);
+  date.setDate(
+    date.getDate() -
+      (day === 0 ? 6 : day - 1)
+  );
+
+  return date;
+})();
+
+const homeTasks = tasks
+  .filter((task) => task.active)
+  .map((task) => {
+    const relevantClaims =
+      currentUserClaims.filter((claim) => {
+        if (claim.taskId !== task.id) {
+          return false;
+        }
+
+        const claimDate = new Date(
+          claim.timestamp
+        );
+
+        if (task.frequency === "daily") {
+          return (
+            claimDate.toDateString() ===
+            todayKey
+          );
+        }
+
+        if (task.frequency === "weekly") {
+          return (
+            claimDate.getTime() >=
+            startOfCurrentWeekForHome.getTime()
+          );
+        }
+
+        return true;
+      });
+
+    const latestClaim =
+      relevantClaims.sort(
+        (a, b) =>
+          new Date(
+            b.rejectedAt ??
+              b.approvedAt ??
+              b.timestamp
+          ).getTime() -
+          new Date(
+            a.rejectedAt ??
+              a.approvedAt ??
+              a.timestamp
+          ).getTime()
       )[0];
-    const isCompleted = latestClaim?.status === "approved";
+
+    const isCompleted =
+      latestClaim?.status === "approved";
 
     return {
       id: task.id,

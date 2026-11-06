@@ -233,26 +233,42 @@ export function Tasks({
   const activeTasks = tasks.filter((task) => task.active);
 
   const getLatestClaimForTask = (task: Task) => {
-    const relevantClaims = trackedUserClaims.filter((claim) => {
-      if (claim.taskId !== task.id) return false;
+  const relevantClaims = trackedUserClaims.filter((claim) => {
+    if (claim.taskId !== task.id) return false;
 
-      if (task.frequency === "daily") {
-        return new Date(claim.timestamp).toDateString() === todayKey;
-      }
+    const claimDate = new Date(claim.timestamp);
 
-      return true;
-    });
+    if (task.frequency === "daily") {
+      return (
+        claimDate.toDateString() ===
+        todayKey
+      );
+    }
 
-    return relevantClaims.sort(
-      (a, b) =>
-        new Date(
-          b.rejectedAt ?? b.approvedAt ?? b.timestamp
-        ).getTime() -
-        new Date(
-          a.rejectedAt ?? a.approvedAt ?? a.timestamp
-        ).getTime()
-    )[0];
-  };
+    if (task.frequency === "weekly") {
+      return (
+        claimDate.getTime() >=
+        startOfCurrentWeek.getTime()
+      );
+    }
+
+    return true;
+  });
+
+  return relevantClaims.sort(
+    (a, b) =>
+      new Date(
+        b.rejectedAt ??
+          b.approvedAt ??
+          b.timestamp
+      ).getTime() -
+      new Date(
+        a.rejectedAt ??
+          a.approvedAt ??
+          a.timestamp
+      ).getTime()
+  )[0];
+};
 
   const openTaskForm = (mode: "create" | "edit", task?: Task) => {
     setTaskFormMode(mode);
