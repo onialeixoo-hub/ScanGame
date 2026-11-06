@@ -1,1 +1,1 @@
-Deploy ScanGame XP update
+Deploy task frequency fix
