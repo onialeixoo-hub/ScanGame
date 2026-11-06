@@ -1,0 +1,705 @@
+name: Home GTA VI y notificar a Marti
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/home-goal-notify.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Mostrar GTA VI solo en Home
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path("src/app/components/GoalsLauncher.tsx")
+          text = path.read_text(encoding="utf-8")
+
+          anchor = """  useEffect(() => {
+            let unsubscribeProfile =
+              () => {};
+          """
+
+          extra = """  const [
+            homeVisible,
+            setHomeVisible
+          ] = useState(false);
+
+          const [
+            uiBlocked,
+            setUiBlocked
+          ] = useState(false);
+
+
+          useEffect(() => {
+            const refreshSurfaceState = () => {
+              const isHome = Boolean(
+                document.querySelector(
+                  "[data-scangame-scan-trigger]"
+                )
+              );
+
+              const overlays = Array.from(
+                document.querySelectorAll<HTMLElement>(
+                  ".fixed.inset-0"
+                )
+              );
+
+              const hasBlockingOverlay =
+                overlays.some((element) => {
+                  if (
+                    element.dataset
+                      .scangameGoalsOverlay ===
+                    "true"
+                  ) {
+                    return false;
+                  }
+
+                  const style =
+                    window.getComputedStyle(
+                      element
+                    );
+
+                  return (
+                    style.display !== "none" &&
+                    style.visibility !== "hidden"
+                  );
+                });
+
+              setHomeVisible(isHome);
+              setUiBlocked(
+                hasBlockingOverlay
+              );
+            };
+
+            refreshSurfaceState();
+
+            const observer =
+              new MutationObserver(
+                refreshSurfaceState
+              );
+
+            observer.observe(
+              document.body,
+              {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: [
+                  "class",
+                  "style",
+                  "hidden"
+                ]
+              }
+            );
+
+            window.addEventListener(
+              "resize",
+              refreshSurfaceState
+            );
+
+            return () => {
+              observer.disconnect();
+
+              window.removeEventListener(
+                "resize",
+                refreshSurfaceState
+              );
+            };
+          }, []);
+
+
+          useEffect(() => {
+            const openGoals = () => {
+              setOpen(true);
+            };
+
+            window.addEventListener(
+              "scangame-open-goals",
+              openGoals
+            );
+
+            return () => {
+              window.removeEventListener(
+                "scangame-open-goals",
+                openGoals
+              );
+            };
+          }, []);
+
+
+          """
+
+          if "const [\n    homeVisible" not in text:
+              if anchor not in text:
+                  raise SystemExit(
+                      "No encontré el punto donde agregar el control de Home."
+                  )
+
+              text = text.replace(
+                  anchor,
+                  extra + anchor,
+                  1
+              )
+
+          old_launcher = """      {!open && ("""
+          new_launcher = """      {!open &&
+        currentUser.role === "user" &&
+        homeVisible &&
+        !uiBlocked && ("""
+
+          if new_launcher not in text:
+              if old_launcher not in text:
+                  raise SystemExit(
+                      "No encontré la pastilla de metas."
+                  )
+
+              text = text.replace(
+                  old_launcher,
+                  new_launcher,
+                  1
+              )
+
+          old_overlay = """        <div className="fixed inset-0 z-[1000] overflow-y-auto bg-[#E2DADB]">"""
+
+          new_overlay = """        <div
+          data-scangame-goals-overlay="true"
+          className="fixed inset-0 z-[1000] overflow-y-auto bg-[#E2DADB]"
+        >"""
+
+          if (
+              "data-scangame-goals-overlay" not in
+              text
+          ):
+              if old_overlay not in text:
+                  raise SystemExit(
+                      "No encontré el overlay de metas."
+                  )
+
+              text = text.replace(
+                  old_overlay,
+                  new_overlay,
+                  1
+              )
+
+          path.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print(
+              "✅ GTA VI configurado solo para Home."
+          )
+          PY
+
+      - name: Reemplazar AccountMenu completo
+        shell: bash
+        run: |
+          cat > src/app/components/AccountMenu.tsx <<'EOF'
+          import { useState } from "react";
+          import { AnimatePresence, motion } from "motion/react";
+          import {
+            BellRing,
+            LogOut,
+            Send,
+            ShieldCheck,
+            Target,
+            UserRound,
+            XCircle
+          } from "lucide-react";
+          import {
+            addDoc,
+            collection,
+            getDocs,
+            query,
+            where
+          } from "firebase/firestore";
+          import { toast } from "sonner";
+
+          import { db } from "@/firebase";
+          import { Button } from "@/app/components/ui/button";
+          import { Card } from "@/app/components/ui/card";
+          import { Textarea } from "@/app/components/ui/textarea";
+          import type { User, UserProgress } from "@/app/types";
+          import { getAvatarSrc } from "@/app/lib/avatar-options";
+
+          interface AccountMenuProps {
+            open: boolean;
+            user: User;
+            progress: UserProgress;
+            productsCount: number;
+            categoriesCount: number;
+            onClose: () => void;
+            onLogout: () => void;
+          }
+
+          export function AccountMenu({
+            open,
+            user,
+            progress,
+            productsCount,
+            categoriesCount,
+            onClose,
+            onLogout
+          }: AccountMenuProps) {
+            const isAdmin = user.role === "admin";
+            const avatarSrc = getAvatarSrc(
+              user.avatar,
+              user.role
+            );
+
+            const [
+              showNotifyForm,
+              setShowNotifyForm
+            ] = useState(false);
+
+            const [
+              notificationText,
+              setNotificationText
+            ] = useState("");
+
+            const [
+              sendingNotification,
+              setSendingNotification
+            ] = useState(false);
+
+            const sendNotificationToMarti =
+              async () => {
+                if (
+                  !isAdmin ||
+                  sendingNotification
+                ) {
+                  return;
+                }
+
+                const message =
+                  notificationText.trim();
+
+                if (!message) {
+                  toast.error(
+                    "Escribí un mensaje para Marti"
+                  );
+                  return;
+                }
+
+                try {
+                  setSendingNotification(
+                    true
+                  );
+
+                  const usersSnapshot =
+                    await getDocs(
+                      query(
+                        collection(
+                          db,
+                          "users"
+                        ),
+                        where(
+                          "role",
+                          "==",
+                          "user"
+                        )
+                      )
+                    );
+
+                  const martiDocument =
+                    usersSnapshot.docs.find(
+                      (document) => {
+                        const data =
+                          document.data() as {
+                            name?: string;
+                            username?: string;
+                          };
+
+                        const search =
+                          `${
+                            data.name ?? ""
+                          } ${
+                            data.username ?? ""
+                          }`
+                            .toLowerCase()
+                            .trim();
+
+                        return (
+                          search.includes(
+                            "marti"
+                          ) ||
+                          search.includes(
+                            "martiniano"
+                          )
+                        );
+                      }
+                    ) ??
+                    usersSnapshot.docs[0];
+
+                  if (!martiDocument) {
+                    toast.error(
+                      "No encontré la cuenta de Marti"
+                    );
+                    return;
+                  }
+
+                  await addDoc(
+                    collection(
+                      db,
+                      "notifications"
+                    ),
+                    {
+                      recipientId:
+                        martiDocument.id,
+                      senderId: user.id,
+                      title:
+                        `💬 Mensaje de ${user.name}`,
+                      body: message,
+                      type: "system",
+                      createdAt:
+                        new Date().toISOString(),
+                      read: false,
+                      sourceId:
+                        `manual_${Date.now()}`
+                    }
+                  );
+
+                  setNotificationText("");
+                  setShowNotifyForm(false);
+
+                  toast.success(
+                    "Notificación enviada a Marti"
+                  );
+                } catch (error) {
+                  console.error(
+                    "Error enviando notificación manual:",
+                    error
+                  );
+
+                  toast.error(
+                    "No se pudo enviar la notificación"
+                  );
+                } finally {
+                  setSendingNotification(
+                    false
+                  );
+                }
+              };
+
+            const openGoals = () => {
+              onClose();
+
+              window.dispatchEvent(
+                new CustomEvent(
+                  "scangame-open-goals"
+                )
+              );
+            };
+
+            return (
+              <AnimatePresence>
+                {open && (
+                  <motion.div
+                    className="fixed inset-0 z-[100] flex"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <div
+                      className="flex-1 bg-black/45"
+                      onClick={onClose}
+                      aria-hidden="true"
+                    />
+
+                    <motion.aside
+                      className="flex h-full w-[84%] max-w-xs flex-col overflow-y-auto bg-gradient-to-b from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-2xl"
+                      initial={{ x: "100%" }}
+                      animate={{ x: 0 }}
+                      exit={{ x: "100%" }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 260,
+                        damping: 30
+                      }}
+                    >
+                      <div className="mb-6 flex items-center justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full bg-white/20">
+                            {avatarSrc ? (
+                              <img
+                                src={avatarSrc}
+                                alt={`Avatar de ${user.name}`}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : isAdmin ? (
+                              <ShieldCheck className="m-3 h-8 w-8 text-white" />
+                            ) : (
+                              <UserRound className="m-3 h-8 w-8 text-white" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate text-lg font-semibold">
+                              {user.name}
+                            </p>
+
+                            <p className="text-xs text-white/80">
+                              {isAdmin
+                                ? "Cuenta administradora"
+                                : "Modo aventura"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-white hover:bg-white/20"
+                          onClick={onClose}
+                          aria-label="Cerrar menú"
+                        >
+                          <XCircle className="h-5 w-5" />
+                        </Button>
+                      </div>
+
+                      {isAdmin ? (
+                        <div className="space-y-3">
+                          <Card className="border-white/20 bg-white/95 p-4 text-[#12130F]">
+                            <div className="flex items-center gap-3">
+                              <div className="rounded-full bg-[#386FA4]/10 p-3">
+                                <ShieldCheck className="h-6 w-6 text-[#386FA4]" />
+                              </div>
+
+                              <div>
+                                <p className="font-bold">
+                                  Modo administrador
+                                </p>
+
+                                <p className="text-sm text-[#386FA4]">
+                                  Podés gestionar tareas, tienda y notificaciones de Marti.
+                                </p>
+                              </div>
+                            </div>
+                          </Card>
+
+                          <Button
+                            type="button"
+                            className="w-full bg-violet-600 text-white hover:bg-violet-700"
+                            onClick={openGoals}
+                          >
+                            <Target className="mr-2 h-4 w-4" />
+                            Metas especiales
+                          </Button>
+
+                          <Button
+                            type="button"
+                            className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
+                            onClick={() =>
+                              setShowNotifyForm(
+                                (value) => !value
+                              )
+                            }
+                          >
+                            <BellRing className="mr-2 h-4 w-4" />
+                            Notificar a Marti
+                          </Button>
+
+                          {showNotifyForm && (
+                            <Card className="border-white/20 bg-white/95 p-4 text-[#12130F]">
+                              <p className="font-bold">
+                                Mensaje para Marti
+                              </p>
+
+                              <p className="mt-1 text-xs text-[#386FA4]">
+                                Le va a aparecer en su centro de notificaciones.
+                              </p>
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-[#386FA4]/10 px-3 py-1.5 text-xs font-semibold text-[#386FA4]"
+                                  onClick={() =>
+                                    setNotificationText(
+                                      "Revisá ScanGame cuando puedas 👀"
+                                    )
+                                  }
+                                >
+                                  Revisá ScanGame
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-[#386FA4]/10 px-3 py-1.5 text-xs font-semibold text-[#386FA4]"
+                                  onClick={() =>
+                                    setNotificationText(
+                                      "Tenés tareas pendientes para revisar ✅"
+                                    )
+                                  }
+                                >
+                                  Tareas
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-[#386FA4]/10 px-3 py-1.5 text-xs font-semibold text-[#386FA4]"
+                                  onClick={() =>
+                                    setNotificationText(
+                                      "Acordate de mirar tus objetivos 🎯"
+                                    )
+                                  }
+                                >
+                                  Objetivos
+                                </button>
+                              </div>
+
+                              <Textarea
+                                className="mt-3 min-h-24 resize-none"
+                                placeholder="Escribí el mensaje..."
+                                maxLength={220}
+                                value={
+                                  notificationText
+                                }
+                                onChange={(event) =>
+                                  setNotificationText(
+                                    event.target.value
+                                  )
+                                }
+                              />
+
+                              <div className="mt-2 text-right text-xs text-[#386FA4]">
+                                {
+                                  notificationText.length
+                                }
+                                /220
+                              </div>
+
+                              <div className="mt-3 grid grid-cols-2 gap-2">
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setShowNotifyForm(
+                                      false
+                                    );
+                                    setNotificationText(
+                                      ""
+                                    );
+                                  }}
+                                >
+                                  Cancelar
+                                </Button>
+
+                                <Button
+                                  type="button"
+                                  className="bg-[#386FA4] text-white hover:bg-[#2d5a85]"
+                                  disabled={
+                                    sendingNotification ||
+                                    !notificationText.trim()
+                                  }
+                                  onClick={() =>
+                                    void sendNotificationToMarti()
+                                  }
+                                >
+                                  <Send className="mr-2 h-4 w-4" />
+                                  {sendingNotification
+                                    ? "Enviando..."
+                                    : "Enviar"}
+                                </Button>
+                              </div>
+                            </Card>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <Card className="bg-white/95 p-3 text-[#12130F]">
+                            <p className="text-xs text-[#386FA4]">
+                              XP disponibles
+                            </p>
+
+                            <p className="text-lg font-bold">
+                              {progress.points}
+                            </p>
+                          </Card>
+
+                          <Card className="bg-white/95 p-3 text-[#12130F]">
+                            <p className="text-xs text-[#386FA4]">
+                              XP acumulada
+                            </p>
+
+                            <p className="text-lg font-bold">
+                              {progress.xp}
+                            </p>
+                          </Card>
+
+                          <Card className="bg-white/95 p-3 text-[#12130F]">
+                            <p className="text-xs text-[#386FA4]">
+                              Productos
+                            </p>
+
+                            <p className="text-lg font-bold">
+                              {productsCount}
+                            </p>
+                          </Card>
+
+                          <Card className="bg-white/95 p-3 text-[#12130F]">
+                            <p className="text-xs text-[#386FA4]">
+                              Categorías
+                            </p>
+
+                            <p className="text-lg font-bold">
+                              {categoriesCount}
+                            </p>
+                          </Card>
+                        </div>
+                      )}
+
+                      <div className="mt-auto pt-6">
+                        <Button
+                          type="button"
+                          className="w-full bg-white text-[#386FA4] hover:bg-white/90"
+                          onClick={onLogout}
+                        >
+                          <LogOut className="mr-2 h-4 w-4" />
+                          Salir de la cuenta
+                        </Button>
+                      </div>
+                    </motion.aside>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            );
+          }
+          EOF
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Comprobar compilación
+        run: npm run build
+
+      - name: Guardar cambios
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            src/app/components/GoalsLauncher.tsx \
+            src/app/components/AccountMenu.tsx
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios para guardar."
+            exit 0
+          fi
+
+          git commit -m "Show GTA goal only on home and add manual Marti notifications"
+          git push
