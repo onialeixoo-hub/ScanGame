@@ -1,0 +1,1592 @@
+name: Fotos, escaneos y controles ScanGame
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/photo-scan-notifications.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Actualizar App
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path("src/app/App.tsx")
+          text = path.read_text(encoding="utf-8")
+
+          # 1. Open Food Facts universal
+          text = text.replace(
+              '"image_url",',
+              '"image_front_url",\n      "image_url",',
+              1
+          )
+
+          text = text.replace(
+              '`https://world.openfoodfacts.org/api/v2/product/${barcode}?fields=${fields}`',
+              '`https://world.openfoodfacts.org/api/v2/product/${barcode}?product_type=all&fields=${fields}`',
+              1
+          )
+
+          text = text.replace(
+              'imageUrl: productFromOff?.image_url,',
+              'imageUrl: productFromOff?.image_front_url || productFromOff?.image_url,',
+              1
+          )
+
+          # 2. Buscar foto para productos existentes
+          marker = '  const handleScan = async (barcode: string) => {'
+
+          if "const handleFindProductImage" not in text:
+              handler = '''  const handleFindProductImage = async (
+            product: CollectedProduct
+          ) => {
+            if (
+              !currentUser ||
+              currentUser.role !== "user"
+            ) {
+              return;
+            }
+
+            try {
+              const productFromOff =
+                await fetchOpenFoodFactsProduct(
+                  product.barcode
+                );
+
+              const imageUrl =
+                productFromOff?.image_front_url ||
+                productFromOff?.image_url;
+
+              if (!imageUrl) {
+                toast.error(
+                  "No encontré una foto para este código de barras"
+                );
+                return;
+              }
+
+              await updateDoc(
+                doc(
+                  db,
+                  "users",
+                  currentUser.id,
+                  "products",
+                  encodeURIComponent(
+                    product.barcode
+                  )
+                ),
+                {
+                  imageUrl
+                }
+              );
+
+              toast.success(
+                "Foto encontrada y guardada 📸"
+              );
+            } catch (error) {
+              console.error(
+                "Error buscando foto:",
+                error
+              );
+
+              toast.error(
+                "No se pudo buscar la foto"
+              );
+            }
+          };
+
+
+          '''
+
+              if marker not in text:
+                  raise SystemExit(
+                      "No encontré handleScan en App.tsx"
+                  )
+
+              text = text.replace(
+                  marker,
+                  handler + marker,
+                  1
+              )
+
+          # 3. Informar a GoalsLauncher cuándo estamos realmente en Home
+          today_marker = (
+              '  const todayKey = useMemo(() => '
+              'new Date().toDateString(), []);\n'
+          )
+
+          if (
+              "scangame-surface-change"
+              not in text
+          ):
+              surface_effect = '''  useEffect(() => {
+            const homeVisible =
+              currentUser?.role === "user" &&
+              activeTab === "home" &&
+              !showScanner &&
+              !scannedProduct &&
+              !selectedProduct &&
+              !isFetchingProduct &&
+              !showAccountMenu;
+
+            document.body.dataset.scangameHome =
+              homeVisible ? "true" : "false";
+
+            window.dispatchEvent(
+              new CustomEvent(
+                "scangame-surface-change",
+                {
+                  detail: {
+                    homeVisible
+                  }
+                }
+              )
+            );
+          }, [
+            currentUser?.role,
+            activeTab,
+            showScanner,
+            scannedProduct,
+            selectedProduct,
+            isFetchingProduct,
+            showAccountMenu
+          ]);
+
+
+          '''
+
+              if today_marker not in text:
+                  raise SystemExit(
+                      "No encontré todayKey"
+                  )
+
+              text = text.replace(
+                  today_marker,
+                  today_marker +
+                  "\n" +
+                  surface_effect,
+                  1
+              )
+
+          # 4. Pasar callback de búsqueda de foto
+          old_collection = '''            <Collection
+              products={userCollection}
+              onProductClick={(product) => setSelectedProduct(product)}
+            />'''
+
+          new_collection = '''            <Collection
+              products={userCollection}
+              onProductClick={(product) => setSelectedProduct(product)}
+              onFindImage={handleFindProductImage}
+            />'''
+
+          if old_collection in text:
+              text = text.replace(
+                  old_collection,
+                  new_collection,
+                  1
+              )
+
+          path.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print("✅ App.tsx actualizado")
+          PY
+
+      - name: Reemplazar Collection completo
+        shell: bash
+        run: |
+          cat > src/app/components/Collection.tsx <<'EOF'
+          import {
+            useMemo,
+            useState
+          } from "react";
+
+          import { motion } from "motion/react";
+
+          import {
+            ImageIcon,
+            Loader2,
+            Search,
+            Star
+          } from "lucide-react";
+
+          import {
+            Badge
+          } from "@/app/components/ui/badge";
+
+          import {
+            Button
+          } from "@/app/components/ui/button";
+
+          import {
+            Card
+          } from "@/app/components/ui/card";
+
+          import {
+            Input
+          } from "@/app/components/ui/input";
+
+          import {
+            Select,
+            SelectContent,
+            SelectItem,
+            SelectTrigger,
+            SelectValue
+          } from "@/app/components/ui/select";
+
+          import type {
+            AppCategory,
+            CollectedProduct
+          } from "@/app/types";
+
+          import {
+            APP_CATEGORIES
+          } from "@/app/lib/products";
+
+
+          interface CollectionProps {
+            products: CollectedProduct[];
+
+            onProductClick: (
+              product: CollectedProduct
+            ) => void;
+
+            onFindImage: (
+              product: CollectedProduct
+            ) => Promise<void>;
+          }
+
+
+          const rarityColors = {
+            común:
+              "from-gray-400 to-gray-500",
+            raro:
+              "from-blue-400 to-blue-600",
+            épico:
+              "from-purple-400 to-purple-600",
+            legendario:
+              "from-amber-400 to-orange-500"
+          };
+
+
+          const sortOptions = [
+            {
+              value: "recent",
+              label: "Recientes"
+            },
+            {
+              value: "most",
+              label: "Más escaneados"
+            },
+            {
+              value: "az",
+              label: "A-Z"
+            }
+          ];
+
+
+          export function Collection({
+            products,
+            onProductClick,
+            onFindImage
+          }: CollectionProps) {
+            const [
+              searchText,
+              setSearchText
+            ] = useState("");
+
+            const [
+              activeCategory,
+              setActiveCategory
+            ] =
+              useState<
+                AppCategory | "Todas"
+              >("Todas");
+
+            const [
+              sortBy,
+              setSortBy
+            ] = useState("recent");
+
+            const [
+              findingImage,
+              setFindingImage
+            ] =
+              useState<
+                string | null
+              >(null);
+
+            const [
+              failedImages,
+              setFailedImages
+            ] =
+              useState<
+                Record<
+                  string,
+                  string
+                >
+              >({});
+
+
+            const filteredProducts =
+              useMemo(() => {
+                const normalizedSearch =
+                  searchText
+                    .trim()
+                    .toLowerCase();
+
+                const filtered =
+                  products.filter(
+                    (product) => {
+                      const matchesSearch =
+                        !normalizedSearch ||
+                        product.name
+                          .toLowerCase()
+                          .includes(
+                            normalizedSearch
+                          ) ||
+                        product.brand
+                          ?.toLowerCase()
+                          .includes(
+                            normalizedSearch
+                          ) ||
+                        product.barcode.includes(
+                          normalizedSearch
+                        );
+
+                      const matchesCategory =
+                        activeCategory ===
+                          "Todas" ||
+                        product.appCategory ===
+                          activeCategory;
+
+                      return (
+                        matchesSearch &&
+                        matchesCategory
+                      );
+                    }
+                  );
+
+                return [
+                  ...filtered
+                ].sort((a, b) => {
+                  if (
+                    sortBy === "most"
+                  ) {
+                    return (
+                      b.scanCount -
+                      a.scanCount
+                    );
+                  }
+
+                  if (
+                    sortBy === "az"
+                  ) {
+                    return a.name.localeCompare(
+                      b.name
+                    );
+                  }
+
+                  return (
+                    new Date(
+                      b.lastScannedAt
+                    ).getTime() -
+                    new Date(
+                      a.lastScannedAt
+                    ).getTime()
+                  );
+                });
+              }, [
+                products,
+                searchText,
+                activeCategory,
+                sortBy
+              ]);
+
+
+            const searchImage = async (
+              event:
+                React.MouseEvent,
+              product:
+                CollectedProduct
+            ) => {
+              event.stopPropagation();
+
+              if (findingImage) {
+                return;
+              }
+
+              try {
+                setFindingImage(
+                  product.barcode
+                );
+
+                await onFindImage(
+                  product
+                );
+              } finally {
+                setFindingImage(
+                  null
+                );
+              }
+            };
+
+
+            return (
+              <div className="min-h-screen bg-[#E2DADB] pb-28">
+                <div className="sticky top-0 z-10 space-y-4 bg-gradient-to-r from-[#386FA4] to-[#2d5a85] px-6 py-6 shadow-lg">
+
+                  <div>
+                    <h1 className="text-2xl font-bold text-white">
+                      Colección
+                    </h1>
+
+                    <p className="text-sm text-white/80">
+                      {products.length} productos guardados
+                    </p>
+                  </div>
+
+
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-white/70" />
+
+                    <Input
+                      value={searchText}
+                      onChange={(
+                        event
+                      ) =>
+                        setSearchText(
+                          event.target.value
+                        )
+                      }
+                      placeholder="Buscar por nombre, marca o barcode"
+                      className="border-white/20 bg-white/10 pl-9 text-white placeholder:text-white/60"
+                    />
+                  </div>
+
+
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    <Button
+                      size="sm"
+                      variant={
+                        activeCategory ===
+                        "Todas"
+                          ? "secondary"
+                          : "outline"
+                      }
+                      className="whitespace-nowrap"
+                      onClick={() =>
+                        setActiveCategory(
+                          "Todas"
+                        )
+                      }
+                    >
+                      Todas
+                    </Button>
+
+                    {APP_CATEGORIES.map(
+                      (category) => (
+                        <Button
+                          key={
+                            category
+                          }
+                          size="sm"
+                          variant={
+                            activeCategory ===
+                            category
+                              ? "secondary"
+                              : "outline"
+                          }
+                          className="whitespace-nowrap"
+                          onClick={() =>
+                            setActiveCategory(
+                              category
+                            )
+                          }
+                        >
+                          {
+                            category
+                          }
+                        </Button>
+                      )
+                    )}
+                  </div>
+
+
+                  <Select
+                    value={sortBy}
+                    onValueChange={
+                      setSortBy
+                    }
+                  >
+                    <SelectTrigger className="border-white/20 bg-white/10 text-white">
+                      <SelectValue placeholder="Ordenar" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      {sortOptions.map(
+                        (option) => (
+                          <SelectItem
+                            key={
+                              option.value
+                            }
+                            value={
+                              option.value
+                            }
+                          >
+                            {
+                              option.label
+                            }
+                          </SelectItem>
+                        )
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+
+                <div className="px-6 pt-6">
+                  {filteredProducts.length ===
+                  0 ? (
+                    <Card className="border-2 border-dashed border-[#386FA4]/30 bg-white/80 p-6 text-center">
+                      <p className="font-semibold text-blue-700">
+                        No hay productos que coincidan.
+                      </p>
+                    </Card>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {filteredProducts.map(
+                        (
+                          product,
+                          index
+                        ) => {
+                          const usableImage =
+                            Boolean(
+                              product.imageUrl
+                            ) &&
+                            failedImages[
+                              product.barcode
+                            ] !==
+                              product.imageUrl;
+
+                          const searching =
+                            findingImage ===
+                            product.barcode;
+
+                          return (
+                            <motion.div
+                              key={
+                                product.barcode
+                              }
+                              initial={{
+                                opacity: 0,
+                                scale:
+                                  0.95
+                              }}
+                              animate={{
+                                opacity: 1,
+                                scale: 1
+                              }}
+                              transition={{
+                                delay:
+                                  index *
+                                  0.03
+                              }}
+                            >
+                              <Card
+                                onClick={() =>
+                                  onProductClick(
+                                    product
+                                  )
+                                }
+                                className="cursor-pointer border-2 border-blue-200 bg-white/90 p-4 backdrop-blur transition-shadow hover:shadow-lg"
+                              >
+
+                                <div
+                                  className={`relative mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br ${
+                                    rarityColors[
+                                      product
+                                        .rarity
+                                    ]
+                                  } shadow-md`}
+                                >
+
+                                  {usableImage ? (
+                                    <img
+                                      src={
+                                        product.imageUrl
+                                      }
+                                      alt={
+                                        product.name
+                                      }
+                                      className="h-full w-full object-cover"
+                                      onError={() =>
+                                        setFailedImages(
+                                          (
+                                            previous
+                                          ) => ({
+                                            ...previous,
+                                            [
+                                              product
+                                                .barcode
+                                            ]:
+                                              product.imageUrl ??
+                                              ""
+                                          })
+                                        )
+                                      }
+                                    />
+                                  ) : (
+                                    <>
+                                      <Star className="h-8 w-8 text-white" />
+
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          searching
+                                        }
+                                        onClick={(
+                                          event
+                                        ) =>
+                                          void searchImage(
+                                            event,
+                                            product
+                                          )
+                                        }
+                                        className="absolute bottom-2 left-2 right-2 flex items-center justify-center gap-1.5 rounded-xl bg-white/95 px-2 py-2 text-[11px] font-bold text-[#386FA4] shadow-lg transition active:scale-[0.97] disabled:opacity-70"
+                                      >
+                                        {searching ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : (
+                                          <ImageIcon className="h-3.5 w-3.5" />
+                                        )}
+
+                                        {searching
+                                          ? "Buscando..."
+                                          : "Buscar foto"}
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+
+
+                                <h4 className="mb-1 line-clamp-2 text-sm font-semibold text-blue-900">
+                                  {
+                                    product.name
+                                  }
+                                </h4>
+
+
+                                {product.brand && (
+                                  <p className="line-clamp-1 text-xs text-blue-600">
+                                    {
+                                      product.brand
+                                    }
+                                  </p>
+                                )}
+
+
+                                <p className="mb-2 text-xs text-slate-500">
+                                  {
+                                    product.appCategory
+                                  }
+                                </p>
+
+
+                                <div className="flex items-center justify-between">
+                                  <Badge className="bg-blue-100 text-xs text-blue-700">
+                                    x
+                                    {
+                                      product.scanCount
+                                    }
+                                  </Badge>
+
+                                  <Badge className="bg-slate-100 text-xs text-slate-700">
+                                    {
+                                      product.rarity
+                                    }
+                                  </Badge>
+                                </div>
+                              </Card>
+                            </motion.div>
+                          );
+                        }
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+          EOF
+
+      - name: Mejorar hora de notificaciones de escaneo
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "src/app/components/GameSystems.tsx"
+          )
+
+          text = path.read_text(
+              encoding="utf-8"
+          )
+
+          if (
+              "createdAt?: string;"
+              not in text
+          ):
+              text = text.replace(
+                  '''    type,
+              sourceId
+            }: {''',
+                  '''    type,
+              sourceId,
+              createdAt
+            }: {''',
+                  1
+              )
+
+              text = text.replace(
+                  '''    sourceId?: string;
+            }) => {''',
+                  '''    sourceId?: string;
+              createdAt?: string;
+            }) => {''',
+                  1
+              )
+
+              text = text.replace(
+                  '''      createdAt: new Date().toISOString(),
+              read: false,''',
+                  '''      createdAt: createdAt ?? new Date().toISOString(),
+              read: false,''',
+                  1
+              )
+
+          old = '''          if (adminPrefs.scans) {
+            void createNotificationOnce({
+              key: `scan_${scan.id}_${adminId}`,
+              recipientId: adminId,
+              senderId: userId,
+              title: "📦 Marti escaneó un producto",
+              body: `${scan.name ?? "Producto"}${
+                scan.rarity ? ` · ${scan.rarity}` : ""
+              }`,
+              type: "scan",
+              sourceId: scan.id
+            });
+          }'''
+
+          new = '''          if (adminPrefs.scans) {
+            const scanTime = scan.scannedAt
+              ? new Date(
+                  scan.scannedAt
+                ).toLocaleTimeString(
+                  "es-AR",
+                  {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone:
+                      "America/Argentina/Buenos_Aires"
+                  }
+                )
+              : null;
+
+            void createNotificationOnce({
+              key: `scan_${scan.id}_${adminId}`,
+              recipientId: adminId,
+              senderId: userId,
+              title: "📦 Marti escaneó un producto",
+              body: `${scan.name ?? "Producto"}${
+                scan.rarity
+                  ? ` · ${scan.rarity}`
+                  : ""
+              }${
+                scanTime
+                  ? ` · ${scanTime} hs`
+                  : ""
+              }`,
+              type: "scan",
+              sourceId: scan.id,
+              createdAt: scan.scannedAt
+            });
+          }'''
+
+          if old not in text:
+              raise SystemExit(
+                  "No encontré el bloque de notificación de escaneo"
+              )
+
+          text = text.replace(
+              old,
+              new,
+              1
+          )
+
+          path.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print(
+              "✅ Horario real de escaneo agregado"
+          )
+          PY
+
+      - name: GTA VI solo en Home
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "src/app/components/GoalsLauncher.tsx"
+          )
+
+          text = path.read_text(
+              encoding="utf-8"
+          )
+
+          open_state = '''  const [
+            open,
+            setOpen
+          ] =
+            useState(false);
+          '''
+
+          if "homeVisible" not in text:
+              home_state = '''  const [
+            homeVisible,
+            setHomeVisible
+          ] =
+            useState(
+              document.body.dataset.scangameHome ===
+                "true"
+            );
+
+
+          '''
+
+              if open_state not in text:
+                  raise SystemExit(
+                      "No encontré estado open de GoalsLauncher"
+                  )
+
+              text = text.replace(
+                  open_state,
+                  open_state +
+                  "\n" +
+                  home_state,
+                  1
+              )
+
+          first_effect = '''  useEffect(() => {
+            let unsubscribeProfile =
+              () => {};
+          '''
+
+          if (
+              "scangame-surface-change"
+              not in text
+          ):
+              listener = '''  useEffect(() => {
+            const handleSurfaceChange = (
+              event: Event
+            ) => {
+              const customEvent =
+                event as CustomEvent<{
+                  homeVisible?: boolean;
+                }>;
+
+              setHomeVisible(
+                customEvent.detail
+                  ?.homeVisible ??
+                  false
+              );
+            };
+
+            const openGoals = () => {
+              setOpen(true);
+            };
+
+            setHomeVisible(
+              document.body.dataset
+                .scangameHome ===
+                "true"
+            );
+
+            window.addEventListener(
+              "scangame-surface-change",
+              handleSurfaceChange
+            );
+
+            window.addEventListener(
+              "scangame-open-goals",
+              openGoals
+            );
+
+            return () => {
+              window.removeEventListener(
+                "scangame-surface-change",
+                handleSurfaceChange
+              );
+
+              window.removeEventListener(
+                "scangame-open-goals",
+                openGoals
+              );
+            };
+          }, []);
+
+
+          '''
+
+              if first_effect not in text:
+                  raise SystemExit(
+                      "No encontré primer useEffect de GoalsLauncher"
+                  )
+
+              text = text.replace(
+                  first_effect,
+                  listener +
+                  first_effect,
+                  1
+              )
+
+          text = text.replace(
+              '''      {!open && (''',
+              '''      {!open &&
+        currentUser.role === "user" &&
+        homeVisible && (''',
+              1
+          )
+
+          path.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print(
+              "✅ GTA VI quedó solo en Home"
+          )
+          PY
+
+      - name: Reemplazar AccountMenu completo
+        shell: bash
+        run: |
+          cat > src/app/components/AccountMenu.tsx <<'EOF'
+          import {
+            useState
+          } from "react";
+
+          import {
+            AnimatePresence,
+            motion
+          } from "motion/react";
+
+          import {
+            BellRing,
+            LogOut,
+            Send,
+            ShieldCheck,
+            Target,
+            UserRound,
+            XCircle
+          } from "lucide-react";
+
+          import {
+            addDoc,
+            collection,
+            getDocs,
+            query,
+            where
+          } from "firebase/firestore";
+
+          import {
+            toast
+          } from "sonner";
+
+          import {
+            db
+          } from "@/firebase";
+
+          import {
+            Button
+          } from "@/app/components/ui/button";
+
+          import {
+            Card
+          } from "@/app/components/ui/card";
+
+          import type {
+            User,
+            UserProgress
+          } from "@/app/types";
+
+          import {
+            getAvatarSrc
+          } from "@/app/lib/avatar-options";
+
+
+          interface AccountMenuProps {
+            open: boolean;
+            user: User;
+            progress: UserProgress;
+            productsCount: number;
+            categoriesCount: number;
+            onClose: () => void;
+            onLogout: () => void;
+          }
+
+
+          export function AccountMenu({
+            open,
+            user,
+            progress,
+            productsCount,
+            categoriesCount,
+            onClose,
+            onLogout
+          }: AccountMenuProps) {
+            const isAdmin =
+              user.role === "admin";
+
+            const avatarSrc =
+              getAvatarSrc(
+                user.avatar,
+                user.role
+              );
+
+            const [
+              showNotify,
+              setShowNotify
+            ] =
+              useState(false);
+
+            const [
+              message,
+              setMessage
+            ] =
+              useState("");
+
+            const [
+              sending,
+              setSending
+            ] =
+              useState(false);
+
+
+            const sendToMarti =
+              async () => {
+                const cleanMessage =
+                  message.trim();
+
+                if (
+                  !isAdmin ||
+                  !cleanMessage ||
+                  sending
+                ) {
+                  return;
+                }
+
+                try {
+                  setSending(true);
+
+                  const snapshot =
+                    await getDocs(
+                      query(
+                        collection(
+                          db,
+                          "users"
+                        ),
+                        where(
+                          "role",
+                          "==",
+                          "user"
+                        )
+                      )
+                    );
+
+                  const marti =
+                    snapshot.docs.find(
+                      (document) => {
+                        const data =
+                          document.data();
+
+                        const search =
+                          `${data.name ?? ""} ${data.username ?? ""}`
+                            .toLowerCase();
+
+                        return (
+                          search.includes(
+                            "marti"
+                          ) ||
+                          search.includes(
+                            "martiniano"
+                          )
+                        );
+                      }
+                    ) ??
+                    snapshot.docs[0];
+
+                  if (!marti) {
+                    toast.error(
+                      "No encontré la cuenta de Marti"
+                    );
+
+                    return;
+                  }
+
+                  await addDoc(
+                    collection(
+                      db,
+                      "notifications"
+                    ),
+                    {
+                      recipientId:
+                        marti.id,
+
+                      senderId:
+                        user.id,
+
+                      title:
+                        "💬 Mensaje de Ona",
+
+                      body:
+                        cleanMessage,
+
+                      type:
+                        "system",
+
+                      createdAt:
+                        new Date()
+                          .toISOString(),
+
+                      read:
+                        false,
+
+                      sourceId:
+                        `manual_${Date.now()}`
+                    }
+                  );
+
+                  setMessage("");
+                  setShowNotify(false);
+
+                  toast.success(
+                    "Notificación enviada a Marti"
+                  );
+                } catch (
+                  error
+                ) {
+                  console.error(
+                    "Error enviando notificación:",
+                    error
+                  );
+
+                  toast.error(
+                    "No se pudo enviar la notificación"
+                  );
+                } finally {
+                  setSending(false);
+                }
+              };
+
+
+            const openGoals =
+              () => {
+                onClose();
+
+                window.dispatchEvent(
+                  new CustomEvent(
+                    "scangame-open-goals"
+                  )
+                );
+              };
+
+
+            return (
+              <AnimatePresence>
+                {open && (
+                  <motion.div
+                    className="fixed inset-0 z-[100] flex"
+                    initial={{
+                      opacity: 0
+                    }}
+                    animate={{
+                      opacity: 1
+                    }}
+                    exit={{
+                      opacity: 0
+                    }}
+                  >
+
+                    <div
+                      className="flex-1 bg-black/45"
+                      onClick={
+                        onClose
+                      }
+                      aria-hidden="true"
+                    />
+
+
+                    <motion.aside
+                      className="flex h-full w-[84%] max-w-xs flex-col overflow-y-auto bg-gradient-to-b from-[#386FA4] to-[#2d5a85] p-5 text-white shadow-2xl"
+                      initial={{
+                        x: "100%"
+                      }}
+                      animate={{
+                        x: 0
+                      }}
+                      exit={{
+                        x: "100%"
+                      }}
+                      transition={{
+                        type:
+                          "spring",
+                        stiffness:
+                          260,
+                        damping:
+                          30
+                      }}
+                    >
+
+                      <div className="mb-6 flex items-center justify-between">
+
+                        <div className="flex min-w-0 items-center gap-3">
+
+                          <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full bg-white/20">
+
+                            {avatarSrc ? (
+                              <img
+                                src={
+                                  avatarSrc
+                                }
+                                alt={`Avatar de ${user.name}`}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : isAdmin ? (
+                              <ShieldCheck className="m-3 h-8 w-8 text-white" />
+                            ) : (
+                              <UserRound className="m-3 h-8 w-8 text-white" />
+                            )}
+
+                          </div>
+
+
+                          <div className="min-w-0">
+
+                            <p className="truncate text-lg font-semibold">
+                              {
+                                user.name
+                              }
+                            </p>
+
+                            <p className="text-xs text-white/80">
+                              {isAdmin
+                                ? "Cuenta administradora"
+                                : "Modo aventura"}
+                            </p>
+
+                          </div>
+                        </div>
+
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-white hover:bg-white/20"
+                          onClick={
+                            onClose
+                          }
+                        >
+                          <XCircle className="h-5 w-5" />
+                        </Button>
+
+                      </div>
+
+
+                      {isAdmin ? (
+                        <div className="space-y-3">
+
+                          <Card className="border-white/20 bg-white/95 p-4 text-[#12130F]">
+
+                            <div className="flex items-center gap-3">
+
+                              <div className="rounded-full bg-[#386FA4]/10 p-3">
+                                <ShieldCheck className="h-6 w-6 text-[#386FA4]" />
+                              </div>
+
+                              <div>
+                                <p className="font-bold">
+                                  Modo administrador
+                                </p>
+
+                                <p className="text-sm text-[#386FA4]">
+                                  Gestioná tareas, tienda, metas y avisos de Marti.
+                                </p>
+                              </div>
+
+                            </div>
+
+                          </Card>
+
+
+                          <Button
+                            type="button"
+                            className="w-full bg-violet-600 text-white hover:bg-violet-700"
+                            onClick={
+                              openGoals
+                            }
+                          >
+                            <Target className="mr-2 h-4 w-4" />
+                            Metas especiales
+                          </Button>
+
+
+                          <Button
+                            type="button"
+                            className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
+                            onClick={() =>
+                              setShowNotify(
+                                (
+                                  previous
+                                ) =>
+                                  !previous
+                              )
+                            }
+                          >
+                            <BellRing className="mr-2 h-4 w-4" />
+                            Notificar a Marti
+                          </Button>
+
+
+                          {showNotify && (
+                            <Card className="bg-white/95 p-4 text-[#12130F]">
+
+                              <p className="font-bold">
+                                Mensaje para Marti
+                              </p>
+
+                              <p className="mt-1 text-xs text-[#386FA4]">
+                                Le aparecerá en la campana de ScanGame.
+                              </p>
+
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-[#386FA4]/10 px-3 py-1.5 text-xs font-bold text-[#386FA4]"
+                                  onClick={() =>
+                                    setMessage(
+                                      "Revisá ScanGame cuando puedas 👀"
+                                    )
+                                  }
+                                >
+                                  Revisá ScanGame
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-[#386FA4]/10 px-3 py-1.5 text-xs font-bold text-[#386FA4]"
+                                  onClick={() =>
+                                    setMessage(
+                                      "Tenés tareas pendientes ✅"
+                                    )
+                                  }
+                                >
+                                  Tareas
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-[#386FA4]/10 px-3 py-1.5 text-xs font-bold text-[#386FA4]"
+                                  onClick={() =>
+                                    setMessage(
+                                      "Acordate de mirar tus objetivos 🎯"
+                                    )
+                                  }
+                                >
+                                  Objetivos
+                                </button>
+
+                              </div>
+
+
+                              <textarea
+                                value={
+                                  message
+                                }
+                                onChange={(
+                                  event
+                                ) =>
+                                  setMessage(
+                                    event
+                                      .target
+                                      .value
+                                  )
+                                }
+                                maxLength={
+                                  220
+                                }
+                                placeholder="Escribí el mensaje..."
+                                className="mt-3 min-h-24 w-full resize-none rounded-xl border border-[#386FA4]/20 bg-white p-3 text-sm outline-none focus:border-[#386FA4]"
+                              />
+
+
+                              <p className="mt-1 text-right text-[10px] text-[#386FA4]">
+                                {
+                                  message.length
+                                }
+                                /220
+                              </p>
+
+
+                              <Button
+                                type="button"
+                                className="mt-3 w-full bg-[#386FA4] text-white hover:bg-[#2d5a85]"
+                                disabled={
+                                  sending ||
+                                  !message.trim()
+                                }
+                                onClick={() =>
+                                  void sendToMarti()
+                                }
+                              >
+
+                                <Send className="mr-2 h-4 w-4" />
+
+                                {sending
+                                  ? "Enviando..."
+                                  : "Enviar"}
+
+                              </Button>
+
+                            </Card>
+                          )}
+
+                        </div>
+                      ) : (
+
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+
+                          <Card className="bg-white/95 p-3 text-[#12130F]">
+                            <p className="text-xs text-[#386FA4]">
+                              XP disponibles
+                            </p>
+                            <p className="text-lg font-bold">
+                              {
+                                progress.points
+                              }
+                            </p>
+                          </Card>
+
+
+                          <Card className="bg-white/95 p-3 text-[#12130F]">
+                            <p className="text-xs text-[#386FA4]">
+                              XP acumulada
+                            </p>
+                            <p className="text-lg font-bold">
+                              {
+                                progress.xp
+                              }
+                            </p>
+                          </Card>
+
+
+                          <Card className="bg-white/95 p-3 text-[#12130F]">
+                            <p className="text-xs text-[#386FA4]">
+                              Productos
+                            </p>
+                            <p className="text-lg font-bold">
+                              {
+                                productsCount
+                              }
+                            </p>
+                          </Card>
+
+
+                          <Card className="bg-white/95 p-3 text-[#12130F]">
+                            <p className="text-xs text-[#386FA4]">
+                              Categorías
+                            </p>
+                            <p className="text-lg font-bold">
+                              {
+                                categoriesCount
+                              }
+                            </p>
+                          </Card>
+
+                        </div>
+                      )}
+
+
+                      <div className="mt-auto pt-6">
+
+                        <Button
+                          type="button"
+                          className="w-full bg-white text-[#386FA4] hover:bg-white/90"
+                          onClick={
+                            onLogout
+                          }
+                        >
+                          <LogOut className="mr-2 h-4 w-4" />
+                          Salir de la cuenta
+                        </Button>
+
+                      </div>
+
+                    </motion.aside>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            );
+          }
+          EOF
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Comprobar compilación
+        run: npm run build
+
+      - name: Guardar cambios
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            src/app/App.tsx \
+            src/app/components/Collection.tsx \
+            src/app/components/GameSystems.tsx \
+            src/app/components/GoalsLauncher.tsx \
+            src/app/components/AccountMenu.tsx
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios."
+            exit 0
+          fi
+
+          git commit -m "Improve product photos scan notifications and home goal"
+          git push
