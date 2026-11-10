@@ -1,0 +1,184 @@
+name: Fix GTA VI solo Home
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/fix-gta-home-only.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Mover GTA VI solamente a Home
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          # =========================
+          # MAIN.TSX
+          # =========================
+
+          main_path = Path("src/main.tsx")
+          main = main_path.read_text(encoding="utf-8")
+
+          main = main.replace(
+              'import { GoalsLauncher } from "./app/components/GoalsLauncher";\n',
+              ""
+          )
+
+          main = main.replace(
+              "    <GoalsLauncher />\n",
+              ""
+          )
+
+          main_path.write_text(
+              main,
+              encoding="utf-8"
+          )
+
+          # =========================
+          # APP.TSX
+          # =========================
+
+          app_path = Path("src/app/App.tsx")
+          app = app_path.read_text(encoding="utf-8")
+
+          import_anchor = (
+              'import { Home } from "./components/Home";\n'
+          )
+
+          goals_import = (
+              'import { GoalsLauncher } '
+              'from "./components/GoalsLauncher";\n'
+          )
+
+          if goals_import not in app:
+              if import_anchor not in app:
+                  raise SystemExit(
+                      "No encontré import Home en App.tsx"
+                  )
+
+              app = app.replace(
+                  import_anchor,
+                  import_anchor + goals_import,
+                  1
+              )
+
+          # Admin conserva acceso a Metas especiales
+          admin_anchor = (
+              '        <Toaster position="top-center" richColors />\n'
+          )
+
+          admin_goals = '''        <GoalsLauncher />
+          '''
+
+          admin_section_start = app.find(
+              'if (currentUser.role === "admin")'
+          )
+
+          admin_toaster = app.find(
+              admin_anchor,
+              admin_section_start
+          )
+
+          if admin_toaster == -1:
+              raise SystemExit(
+                  "No encontré Toaster del admin"
+              )
+
+          admin_insert_pos = (
+              admin_toaster +
+              len(admin_anchor)
+          )
+
+          admin_area = app[
+              admin_insert_pos:
+              admin_insert_pos + 120
+          ]
+
+          if "<GoalsLauncher />" not in admin_area:
+              app = (
+                  app[:admin_insert_pos]
+                  + "\n"
+                  + admin_goals
+                  + app[admin_insert_pos:]
+              )
+
+          # Usuario: GTA VI únicamente en Home real
+          user_return = (
+              '  return (\n'
+              '    <div className="bg-[#E2DADB] min-h-screen '
+              'font-sans text-[#12130F]">\n'
+              '      <Toaster position="top-center" richColors />\n'
+          )
+
+          home_goals = '''      {activeTab === "home" &&
+        !showScanner &&
+        !scannedProduct &&
+        !selectedProduct &&
+        !isFetchingProduct &&
+        !showAccountMenu &&
+        !rejectionNotification &&
+        !scanPopup && (
+          <GoalsLauncher />
+        )}
+
+          '''
+
+          if home_goals not in app:
+              if user_return not in app:
+                  raise SystemExit(
+                      "No encontré el return principal del usuario"
+                  )
+
+              app = app.replace(
+                  user_return,
+                  user_return +
+                  "\n" +
+                  home_goals,
+                  1
+              )
+
+          app_path.write_text(
+              app,
+              encoding="utf-8"
+          )
+
+          print("✅ GoalsLauncher eliminado del montaje global")
+          print("✅ GTA VI solo se renderiza en Home")
+          print("✅ Se oculta con scanner, detalle, menú y popups")
+          PY
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Comprobar compilación
+        run: npm run build
+
+      - name: Guardar corrección
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            src/main.tsx \
+            src/app/App.tsx
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios para guardar."
+            exit 0
+          fi
+
+          git commit -m "Show GTA VI goal only on home"
+          git push
